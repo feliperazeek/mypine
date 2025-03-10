@@ -1,0 +1,13 @@
+//@version=5
+indicator("NakInvest - PFR Identifier", overlay=true)
+
+// === PFR Conditions ===
+// Bullish PFR: Low is lower than the previous two candles, high is higher than the previous two candles, and the close is higher than the previous candle
+bullishPFR = low < low[1] and low < low[2] and high > high[1] and high > high[2] and close > close[1]
+
+// Bearish PFR: High is higher than the previous two candles, low is lower than the previous two candles, and the close is lower than the previous candle
+bearishPFR = high > high[1] and high > high[2] and low < low[1] and low < low[2] and close < close[1]
+
+// === Plot Signals ===
+plotshape(series=bullishPFR, location=location.belowbar, color=color.green, style=shape.labelup, title="Bullish PFR", text="🐂⬆️")
+plotshape(series=bearishPFR, location=location.abovebar, color=color.red, style=shape.labeldown, title="Bearish PFR", text="🐻⬇️")
