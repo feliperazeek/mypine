@@ -1,0 +1,47 @@
+//@version=5
+indicator("NakInvest - PFR Identifier (with Exceptions)", overlay=true)
+
+// === User Configuration ===
+useCandleExceptions = input.bool(true, "Include Candle Exceptions?")  // Default to true
+
+// === Trend Detection (At least 2 out of 3 candles in the same direction) ===
+downTrend = (close[3] > close[2] ? 1 : 0) + (close[2] > close[1] ? 1 : 0) + (close[1] > close ? 1 : 0) >= 2
+upTrend = (close[3] < close[2] ? 1 : 0) + (close[2] < close[1] ? 1 : 0) + (close[1] < close ? 1 : 0) >= 2
+
+// === Classic PFR Conditions ===
+// Bullish PFR: Only valid if downtrend exists
+bullishPFR = downTrend and low < low[1] and low < low[2] and high > high[1] and close > close[1]
+
+// Bearish PFR: Only valid if uptrend exists
+bearishPFR = upTrend and high > high[1] and high > high[2] and low < low[1] and close < close[1]
+
+// === Relaxed Abandoned Baby Conditions ===
+smallWickThreshold = ta.atr(14) * 0.1  // Allow small wicks (10% of ATR)
+
+// Bullish Abandoned Baby: Only valid if downtrend exists
+abandonedBabyBullish = downTrend and close > open and open > high[1] and (low - high) < smallWickThreshold
+
+// Bearish Abandoned Baby: Only valid if uptrend exists
+abandonedBabyBearish = upTrend and close < open and open < low[1] and (high - low) < smallWickThreshold
+
+// === Adjusted Engulfing Conditions ===
+// Bullish Engulfing: Only valid if downtrend exists
+bullishEngulfing = downTrend and close > open and close > high[1] and open < close[1]
+
+// Bearish Engulfing: Only valid if uptrend exists
+bearishEngulfing = upTrend and close < open and close < low[1] and open > close[1]
+
+// === Apply Exception Logic ===
+bullishException = useCandleExceptions and (bullishEngulfing or abandonedBabyBullish)
+bearishException = useCandleExceptions and (bearishEngulfing or abandonedBabyBearish)
+
+// === Plot Classic PFR Signals ===
+plotshape(series=bullishPFR, location=location.belowbar, color=color.green, style=shape.labelup, title="Classic Bullish PFR", text="🐂⬆️")
+plotshape(series=bearishPFR, location=location.abovebar, color=color.red, style=shape.labeldown, title="Classic Bearish PFR", text="🐻⬇️")
+
+// === Plot Exception Signals (if enabled) ===
+plotshape(series=bullishEngulfing and useCandleExceptions, location=location.belowbar, color=color.green, style=shape.labelup, title="Bullish Engulfing", text="📈🔵 Engulf")
+plotshape(series=abandonedBabyBullish and useCandleExceptions, location=location.belowbar, color=color.fuchsia, style=shape.labelup, title="Bullish Abandoned Baby", text="📈🔵 Baby")
+
+plotshape(series=bearishEngulfing and useCandleExceptions, location=location.abovebar, color=color.orange, style=shape.labeldown, title="Bearish Engulfing", text="📉🟠 Engulf")
+plotshape(series=abandonedBabyBearish and useCandleExceptions, location=location.abovebar, color=color.orange, style=shape.labeldown, title="Bearish Abandoned Baby", text="📉🟠 Baby")
