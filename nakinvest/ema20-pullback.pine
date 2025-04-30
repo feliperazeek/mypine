@@ -1,0 +1,348 @@
+//@version=5
+strategy("NakInvest - EMA Pullback Strategy", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=100, commission_type=strategy.commission.percent, commission_value=0.045)
+
+// =============================================================================
+// STRATEGY OVERVIEW
+// =============================================================================
+// This strategy looks for pullback opportunities to the EMA20 line, which is a 
+// popular moving average used by traders to identify potential entry points.
+//
+// Entry Conditions:
+// 1. For Long Positions:
+//    - Price must touch or cross below EMA20
+//    - Candle must close above EMA20
+//    - Candle must be green (bullish)
+//    - Candle must meet minimum size requirement
+//    - EMA20 must be above EMA200 (trend filter)
+//    - Price must pull back at least the specified percentage
+//
+// 2. For Short Positions:
+//    - Price must touch or cross above EMA20
+//    - Candle must close below EMA20
+//    - Candle must be red (bearish)
+//    - Candle must meet minimum size requirement
+//    - EMA20 must be below EMA200 (trend filter)
+//    - Price must pull back at least the specified percentage
+//
+// Exit Conditions:
+// 1. Stop Loss:
+//    - Below candle wick (for longs)
+//    - Above candle wick (for shorts)
+//    - Or percentage-based stop loss
+//
+// 2. Take Profit:
+//    - Risk/Reward ratio based
+//    - Percentage based
+//    - Or when price crosses back to EMA20
+//
+// Visual Indicators:
+// - EMA20 line changes color based on trend:
+//   * Green: Bullish trend (price > EMA20 > EMA200)
+//   * Red: Bearish trend (price < EMA20 < EMA200)
+//   * Yellow: Neutral trend
+// - Entry signals marked with triangles
+// - Stop loss and take profit levels marked with circles
+// - Position details shown on hover over entry signals
+
+// =============================================================================
+// TECHNICAL IMPLEMENTATION
+// =============================================================================
+// The strategy uses the following technical components:
+// 1. EMA Calculations:
+//    - EMA20: Main indicator for pullback detection
+//    - EMA200: Trend filter
+//
+// 2. Pattern Detection:
+//    - Pullback detection using price-EMA20 distance
+//    - Candle color and size analysis
+//    - Trend direction using EMA20 and EMA200 relationship
+//
+// 3. Risk Management:
+//    - Multiple stop loss options (candle-based or percentage)
+//    - Multiple take profit options (R:R, percentage, or EMA cross)
+//    - Position sizing based on equity percentage
+//
+// 4. Visualization:
+//    - Color-coded EMA lines
+//    - Entry/exit markers
+//    - Interactive tooltips with position details
+//    - Debug information for setup analysis
+
+// === Input Parameters ===
+// Position Settings
+enableLong = input.bool(true, "Enable Long Positions", group="Position Settings")
+enableShort = input.bool(true, "Enable Short Positions", group="Position Settings")
+
+// EMA Settings
+emaLength = input.int(9, "EMA Length", minval=1)
+ema200Length = input.int(200, "EMA200 Length", minval=1, group="Trend Filter")
+showEma = input.bool(true, "Show EMA", group="Visual Settings")
+useTrendFilter = input.bool(true, "Use Trend Filter", group="Filters")
+
+// Debug Settings
+showDebug = input.bool(true, "Show Debug Info", group="Debug Settings")
+
+// Pullback Settings
+pullbackPct = input.float(0.1, "Pullback Percentage", minval=0.01, step=0.01, group="Pullback Settings")
+candleSizeType = input.string("Percentage", "Candle Size Type", options=["Absolute", "Percentage"], group="Pullback Settings")
+minCandleSize = input.float(0.5, "Minimum Candle Size", minval=0.01, step=0.01, tooltip="For Absolute: size in price units\nFor Percentage: size as % of price", group="Pullback Settings")
+
+// Risk Management
+slType = input.string("Below Candle Wick", "Stop Loss Type", options=["Below Candle Wick", "Percentage"], group="Risk Management")
+slPercent = input.float(1.0, "Stop Loss %", minval=0.1, step=0.1, group="Risk Management")
+tpType = input.string("RR-Based", "Take Profit Type", options=["RR-Based", "Percentage", "EMA Cross"], group="Risk Management")
+tpPercent = input.float(1.0, "Take Profit %", minval=0.1, step=0.1, group="Risk Management")
+rrRatio = input.float(2.0, "Risk/Reward Ratio", minval=0.5, step=0.1, group="Risk Management")
+
+// Filters
+useVolumeFilter = input.bool(true, "Use Volume Filter", group="Filters")
+minVolume = input.float(1.5, "Minimum Volume Multiplier", minval=0.1, step=0.1, group="Filters")
+
+// Stochastic Settings
+useStochFilter = input.bool(false, "Use Stochastic Filter", group="Filters")
+stochLength = input.int(21, "Stochastic Length", minval=1, group="Filters")
+stochOverbought = input.int(80, "Stochastic Overbought", minval=1, maxval=100, group="Filters")
+stochOversold = input.int(20, "Stochastic Oversold", minval=1, maxval=100, group="Filters")
+
+// === Technical Indicators ===
+ema20 = ta.ema(close, emaLength)
+ema200 = ta.ema(close, ema200Length)
+atr = ta.atr(14)  // 14-period ATR
+
+// Calculate EMA distance
+emaDistance = math.abs(ema20 - ema200) / ema200 * 100
+
+// === Helper Functions ===
+// Calculate candle size and type
+getCandleSize() =>
+    absoluteSize = math.abs(close - open)
+    percentageSize = (absoluteSize / open) * 100
+    candleSizeType == "Absolute" ? absoluteSize : percentageSize
+
+candleSize = getCandleSize()
+isBullishCandle = close > open
+isBearishCandle = close < open
+
+// Calculate pullback distance
+pullbackDistance = (high - ema20) / ema20 * 100
+
+// Stochastic
+stochK = ta.stoch(close, high, low, stochLength)
+stochD = ta.sma(stochK, 3)  // Using default D smoothing of 3
+stochOk = not useStochFilter or (isBullishCandle and stochK < stochOversold) or (isBearishCandle and stochK > stochOverbought)
+
+// Volume filter
+volumeThreshold = ta.sma(volume, 20) * minVolume
+volumeOk = not useVolumeFilter or volume > volumeThreshold
+
+// === Trend Detection ===
+// Bar color rules
+isBullishBar = close > close[1] and close > ema20 and ema20 > ema20[1]
+isBearishBar = close < close[1] and close < ema20 and ema20 < ema20[1]
+
+// EMA20 color rules
+isBullishTrend = close > ema20 and ema20 > ema20[1] and ema20 > ema200
+isBearishTrend = close < ema20 and ema20 < ema20[1] and ema20 < ema200
+isNeutralTrend = not isBullishTrend and not isBearishTrend
+
+// === Visualization ===
+// Bar colors
+barcolor(isBullishBar ? color.green : isBearishBar ? color.red : na)
+
+// EMA20 colors
+plot(showEma ? ema20 : na, "EMA20 Bullish", color=isBullishTrend ? color.green : na, linewidth=3)
+plot(showEma ? ema20 : na, "EMA20 Bearish", color=isBearishTrend ? color.red : na, linewidth=3)
+plot(showEma ? ema20 : na, "EMA20 Neutral", color=isNeutralTrend ? color.yellow : na, linewidth=3)
+plot(showEma ? ema200 : na, "EMA200", color=color.gray, linewidth=2)
+
+// === Pattern Detection ===
+// Bullish Pullback
+bullishPullback = enableLong and 
+                  isBullishCandle and 
+                  candleSize >= minCandleSize and
+                  pullbackDistance >= pullbackPct and
+                  low <= ema20 and
+                  close > ema20 and
+                  stochOk
+
+// Bearish Pullback
+bearishPullback = enableShort and
+                  isBearishCandle and
+                  candleSize >= minCandleSize and
+                  pullbackDistance >= pullbackPct and
+                  high >= ema20 and
+                  close < ema20 and
+                  stochOk
+
+// === Entry Conditions ===
+longCondition = bullishPullback and (not useTrendFilter or isBullishTrend) and volumeOk
+shortCondition = bearishPullback and (not useTrendFilter or isBearishTrend) and volumeOk
+
+// === Risk Management Calculations ===
+// Stop Loss
+bullSL = slType == "Percentage" ? 
+         high * (1 - slPercent / 100) : 
+         math.min(low, low[1], low[2]) - syminfo.mintick
+
+bearSL = slType == "Percentage" ? 
+         low * (1 + slPercent / 100) : 
+         math.max(high, high[1], high[2]) + syminfo.mintick
+
+// Entry Prices
+longEntry = high + syminfo.mintick
+shortEntry = low - syminfo.mintick
+
+// Take Profit
+longTP = tpType == "RR-Based" ? 
+         longEntry + (longEntry - bullSL) * rrRatio : 
+         tpType == "Percentage" ? 
+         longEntry * (1 + tpPercent / 100) : 
+         na
+
+shortTP = tpType == "RR-Based" ? 
+          shortEntry - (bearSL - shortEntry) * rrRatio : 
+          tpType == "Percentage" ? 
+          shortEntry * (1 - tpPercent / 100) : 
+          na
+
+// === Debug Information ===
+// Check if candle crosses EMA20
+candleCrossesEma = (low <= ema20 and high >= ema20) or (low[1] <= ema20[1] and high[1] >= ema20[1])
+
+// Debug messages
+debugMessage = ""
+if (showDebug and candleCrossesEma and not longCondition and not shortCondition)
+    debugMessage := "ℹ️ Debug Info:\n"
+    debugMessage := debugMessage + "📊 Candle Size: " + str.tostring(candleSize) + (candleSizeType == "Percentage" ? "%" : "") + "\n"
+    debugMessage := debugMessage + "📈 ATR: " + str.tostring(atr) + "\n"
+    debugMessage := debugMessage + "📊 Volume: " + str.tostring(volume) + " (Threshold: " + str.tostring(volumeThreshold) + ")\n"
+    debugMessage := debugMessage + "📏 Pullback: " + str.tostring(pullbackDistance) + "%\n"
+    debugMessage := debugMessage + "📐 EMA Distance: " + str.tostring(emaDistance) + "%\n"
+    if useStochFilter
+        debugMessage := debugMessage + "📉 Stochastic K: " + str.tostring(stochK) + "\n"
+    
+    // Check bullish conditions
+    if (isBullishCandle and low <= ema20 and close > ema20)
+        debugMessage := debugMessage + "\n🔍 Bullish Setup Detected:"
+        if (not enableLong)
+            debugMessage := debugMessage + "\n❌ Long positions disabled"
+        if (not isBullishCandle)
+            debugMessage := debugMessage + "\n❌ Not a bullish candle"
+        if (candleSize < minCandleSize)
+            debugMessage := debugMessage + "\n❌ Candle too small (" + str.tostring(candleSize) + " < " + str.tostring(minCandleSize) + ")"
+        if (pullbackDistance < pullbackPct)
+            debugMessage := debugMessage + "\n❌ Pullback too small (" + str.tostring(pullbackDistance) + "% < " + str.tostring(pullbackPct) + "%)"
+        if (useTrendFilter and not isBullishTrend)
+            debugMessage := debugMessage + "\n❌ Not in bullish trend (EMA Distance: " + str.tostring(emaDistance) + "%)"
+        if (useVolumeFilter and not volumeOk)
+            debugMessage := debugMessage + "\n❌ Volume too low (" + str.tostring(volume) + " < " + str.tostring(volumeThreshold) + ")"
+        if (useStochFilter and stochK >= stochOversold)
+            debugMessage := debugMessage + "\n❌ Stochastic not oversold (K: " + str.tostring(stochK) + " >= " + str.tostring(stochOversold) + ")"
+        
+        label.new(bar_index, low, "💡", color=color.new(color.green, 70), style=label.style_label_up, textcolor=color.white, size=size.small, tooltip=debugMessage)
+    
+    // Check bearish conditions
+    if (isBearishCandle and high >= ema20 and close < ema20)
+        debugMessage := debugMessage + "\n🔍 Bearish Setup Detected:"
+        if (not enableShort)
+            debugMessage := debugMessage + "\n❌ Short positions disabled"
+        if (not isBearishCandle)
+            debugMessage := debugMessage + "\n❌ Not a bearish candle"
+        if (candleSize < minCandleSize)
+            debugMessage := debugMessage + "\n❌ Candle too small (" + str.tostring(candleSize) + " < " + str.tostring(minCandleSize) + ")"
+        if (pullbackDistance < pullbackPct)
+            debugMessage := debugMessage + "\n❌ Pullback too small (" + str.tostring(pullbackDistance) + "% < " + str.tostring(pullbackPct) + "%)"
+        if (useTrendFilter and not isBearishTrend)
+            debugMessage := debugMessage + "\n❌ Not in bearish trend (EMA Distance: " + str.tostring(emaDistance) + "%)"
+        if (useVolumeFilter and not volumeOk)
+            debugMessage := debugMessage + "\n❌ Volume too low (" + str.tostring(volume) + " < " + str.tostring(volumeThreshold) + ")"
+        if (useStochFilter and stochK <= stochOverbought)
+            debugMessage := debugMessage + "\n❌ Stochastic not overbought (K: " + str.tostring(stochK) + " <= " + str.tostring(stochOverbought) + ")"
+        
+        label.new(bar_index, high, "💡", color=color.new(color.red, 70), style=label.style_label_down, textcolor=color.white, size=size.small, tooltip=debugMessage)
+
+// === Position Labels ===
+// Long position details
+if (longCondition and enableLong)
+    longTooltip = "🔼 LONG Position Details:\n"
+    longTooltip := longTooltip + "📊 Candle Size: " + str.tostring(candleSize) + (candleSizeType == "Percentage" ? "%" : "") + "\n"
+    longTooltip := longTooltip + "📈 ATR: " + str.tostring(atr) + "\n"
+    longTooltip := longTooltip + "📊 Volume: " + str.tostring(volume) + " (Threshold: " + str.tostring(volumeThreshold) + ")\n"
+    longTooltip := longTooltip + "📏 Pullback: " + str.tostring(pullbackDistance) + "%\n"
+    longTooltip := longTooltip + "📐 EMA Distance: " + str.tostring(emaDistance) + "%\n"
+    if useStochFilter
+        longTooltip := longTooltip + "📉 Stochastic K: " + str.tostring(stochK) + "\n"
+    longTooltip := longTooltip + "\n💰 Entry: " + str.tostring(longEntry) + "\n"
+    longTooltip := longTooltip + "🛑 Stop Loss: " + str.tostring(bullSL) + "\n"
+    if (tpType != "EMA Cross")
+        longTooltip := longTooltip + "🎯 Take Profit: " + str.tostring(longTP) + "\n"
+    else
+        longTooltip := longTooltip + "🎯 Take Profit: EMA Cross\n"
+    longTooltip := longTooltip + "📊 Risk/Reward: " + str.tostring(rrRatio) + "\n"
+    longTooltip := longTooltip + "📋 Order Type: " + (slType == "Percentage" ? "Stop Loss %: " + str.tostring(slPercent) + "%" : "Below Candle Wick") + "\n"
+    longTooltip := longTooltip + "📋 Take Profit Type: " + (tpType == "RR-Based" ? "R:R Based" : tpType == "Percentage" ? "Percentage: " + str.tostring(tpPercent) + "%" : "EMA Cross")
+    
+    label.new(bar_index, low, "🔼", color=color.new(color.green, 70), style=label.style_label_up, textcolor=color.white, size=size.small, tooltip=longTooltip)
+
+// Short position details
+if (shortCondition and enableShort)
+    shortTooltip = "🔽 SHORT Position Details:\n"
+    shortTooltip := shortTooltip + "📊 Candle Size: " + str.tostring(candleSize) + (candleSizeType == "Percentage" ? "%" : "") + "\n"
+    shortTooltip := shortTooltip + "📈 ATR: " + str.tostring(atr) + "\n"
+    shortTooltip := shortTooltip + "📊 Volume: " + str.tostring(volume) + " (Threshold: " + str.tostring(volumeThreshold) + ")\n"
+    shortTooltip := shortTooltip + "📏 Pullback: " + str.tostring(pullbackDistance) + "%\n"
+    shortTooltip := shortTooltip + "📐 EMA Distance: " + str.tostring(emaDistance) + "%\n"
+    if useStochFilter
+        shortTooltip := shortTooltip + "📉 Stochastic K: " + str.tostring(stochK) + "\n"
+    shortTooltip := shortTooltip + "\n💰 Entry: " + str.tostring(shortEntry) + "\n"
+    shortTooltip := shortTooltip + "🛑 Stop Loss: " + str.tostring(bearSL) + "\n"
+    if (tpType != "EMA Cross")
+        shortTooltip := shortTooltip + "🎯 Take Profit: " + str.tostring(shortTP) + "\n"
+    else
+        shortTooltip := shortTooltip + "🎯 Take Profit: EMA Cross\n"
+    shortTooltip := shortTooltip + "📊 Risk/Reward: " + str.tostring(rrRatio) + "\n"
+    shortTooltip := shortTooltip + "📋 Order Type: " + (slType == "Percentage" ? "Stop Loss %: " + str.tostring(slPercent) + "%" : "Above Candle Wick") + "\n"
+    shortTooltip := shortTooltip + "📋 Take Profit Type: " + (tpType == "RR-Based" ? "R:R Based" : tpType == "Percentage" ? "Percentage: " + str.tostring(tpPercent) + "%" : "EMA Cross")
+    
+    label.new(bar_index, high, "🔽", color=color.new(color.red, 70), style=label.style_label_down, textcolor=color.white, size=size.small, tooltip=shortTooltip)
+
+// === Plotting ===
+// Plot entry points
+plotshape(longCondition and enableLong, "Long Signal", shape.triangleup, location.belowbar, color.green, size=size.small)
+plotshape(shortCondition and enableShort, "Short Signal", shape.triangledown, location.abovebar, color.red, size=size.small)
+
+// Plot stop loss and take profit levels
+plot(longCondition and enableLong ? bullSL : na, "Bull SL", color.red, style=plot.style_circles, linewidth=2)
+plot(longCondition and enableLong and tpType != "EMA Cross" ? longTP : na, "Bull TP", color.green, style=plot.style_circles, linewidth=2)
+plot(shortCondition and enableShort ? bearSL : na, "Bear SL", color.red, style=plot.style_circles, linewidth=2)
+plot(shortCondition and enableShort and tpType != "EMA Cross" ? shortTP : na, "Bear TP", color.green, style=plot.style_circles, linewidth=2)
+
+// === Strategy Execution ===
+if (longCondition and enableLong)
+    strategy.entry("Long", strategy.long, limit=longEntry)
+    if (tpType == "EMA Cross")
+        strategy.exit("EMA Cross Long", from_entry="Long", stop=bullSL)
+    else
+        strategy.exit("TP/SL Long", from_entry="Long", stop=bullSL, limit=longTP)
+
+if (shortCondition and enableShort)
+    strategy.entry("Short", strategy.short, limit=shortEntry)
+    if (tpType == "EMA Cross")
+        strategy.exit("EMA Cross Short", from_entry="Short", stop=bearSL)
+    else
+        strategy.exit("TP/SL Short", from_entry="Short", stop=bearSL, limit=shortTP)
+
+// Main Entry Alerts
+alertcondition(longCondition and enableLong, "EMA Pullback - Long Entry", "LONG {{ticker}} | Price: {{close}} | SL: {{strategy.position_size > 0 ? bullSL : 0}} | TP: {{strategy.position_size > 0 ? longTP : 0}}")
+alertcondition(shortCondition and enableShort, "EMA Pullback - Short Entry", "SHORT {{ticker}} | Price: {{close}} | SL: {{strategy.position_size < 0 ? bearSL : 0}} | TP: {{strategy.position_size < 0 ? shortTP : 0}}")
+
+// Stochastic Filter Alerts
+alertcondition(longCondition and enableLong and useStochFilter and stochK < stochOversold, "EMA Pullback - Long + Stoch Oversold", "LONG {{ticker}} | Stoch: {{strategy.position_size > 0 ? stochK : 0}}")
+alertcondition(shortCondition and enableShort and useStochFilter and stochK > stochOverbought, "EMA Pullback - Short + Stoch Overbought", "SHORT {{ticker}} | Stoch: {{strategy.position_size < 0 ? stochK : 0}}")
+// Volume Filter Alerts
+alertcondition(longCondition and enableLong and useVolumeFilter and volume > volumeThreshold * 2, "EMA Pullback - Long + High Volume", "LONG {{ticker}} | High Volume | Price: {{close}}")
+alertcondition(shortCondition and enableShort and useVolumeFilter and volume > volumeThreshold * 2, "EMA Pullback - Short + High Volume", "SHORT {{ticker}} | High Volume | Price: {{close}}")
+
+// Combined Perfect Setup Alerts
+alertcondition(longCondition and enableLong and (not useStochFilter or stochK < stochOversold) and (not useVolumeFilter or volume > volumeThreshold), "EMA Pullback - Perfect Long Setup", "⭐ LONG {{ticker}} | Perfect Setup | Price: {{close}} | SL: {{strategy.position_size > 0 ? bullSL : 0}} | TP: {{strategy.position_size > 0 ? longTP : 0}}")
+alertcondition(shortCondition and enableShort and (not useStochFilter or stochK > stochOverbought) and (not useVolumeFilter or volume > volumeThreshold), "EMA Pullback - Perfect Short Setup", "⭐ SHORT {{ticker}} | Perfect Setup | Price: {{close}} | SL: {{strategy.position_size < 0 ? bearSL : 0}} | TP: {{strategy.position_size < 0 ? shortTP : 0}}")
