@@ -70,6 +70,7 @@ debugPFR = input.bool(false, "Debug PFR Patterns", group=GP_DEBUG)
 debug123 = input.bool(false, "Debug 123 Patterns", group=GP_DEBUG)
 debugEngulfing = input.bool(false, "Debug Engulfing Patterns", group=GP_DEBUG)
 useEmaCrossRules = input.bool(true, "Use EMA Cross Rules", group=GP_FILTERS)
+enableAllEmaCross = input.bool(true, "Enable All EMA Cross Entries", group=GP_FILTERS, tooltip="When enabled, allows entries when price crosses all EMAs, while still respecting other filters")
 
 // === Original Input Parameters (Grouped) ===
 minCandle1Size = input.float(0.1, "Min Candle 1 Size (absolute units)", minval=0.0001, group=GP_CANDLES)
@@ -87,6 +88,8 @@ stochLength = input.int(21, "Stochastic Length", group=GP_FILTERS)
 stochOverbought = input.float(50, "Stoch Overbought", group=GP_FILTERS)
 stochOversold = input.float(50, "Stoch Oversold", group=GP_FILTERS)
 useNoTradeZone = input.bool(true, "Avoid Trading Between EMA40-EMA80", group=GP_FILTERS)
+useVolumeFilter = input.bool(false, "Use Volume Filter", group=GP_FILTERS)
+minVolume = input.float(1.5, "Minimum Volume Multiplier", minval=0.1, step=0.1, group=GP_FILTERS)
 
 // === Date and Session ===
 startDate = timestamp(input.int(2020, "Start Year", group=GP_SESSION), input.int(1, "Start Month", group=GP_SESSION), input.int(1, "Start Day", group=GP_SESSION), 0, 0)
@@ -96,10 +99,10 @@ inSession = not input.bool(true, "Use Session Filter", group=GP_SESSION) or (tim
 
 // === Risk Management ===
 tpType = input.string("Percentage From Entry", "Take Profit Type", options=["RR-Based", "Percentage From Entry"], group=GP_RISK)
-profitTargetRR = input.float(0.1, "Take Profit Ratio (vs SL)", group=GP_RISK)
-tpPercent = input.float(0.1, "Take Profit % From Entry", group=GP_RISK)
-slType = input.string("Percentage", "Stop Loss Type", options=["Below Candle Body", "Below Candle Wick", "Percentage", "Lowest Low"], group=GP_RISK)
-slPercent = input.float(2.0, "Stop Loss %", group=GP_RISK)
+profitTargetRR = input.float(1.0, "Take Profit Ratio (vs SL)", group=GP_RISK)
+tpPercent = input.float(1.0, "Take Profit % From Entry", group=GP_RISK)
+slType = input.string("Below Candle Wick", "Stop Loss Type", options=["Below Candle Body", "Below Candle Wick", "Percentage", "Lowest Low"], group=GP_RISK)
+slPercent = input.float(1.0, "Stop Loss %", group=GP_RISK)
 slCandlesLookback = input.int(10, "Number of Candles for Lowest Low", minval=1, group=GP_RISK)
 
 // === Price Comparison Configuration ===
@@ -111,7 +114,7 @@ enablePFR = input.bool(true, "Enable PFR Pattern", group=GP_PATTERNS)
 enableEngulfing = input.bool(true, "Enable Engulfing Pattern", group=GP_PATTERNS)
 
 // === MACD Configuration ===
-useMacdConfirmation = input.bool(true, "Use MACD Confirmation", group=GP_MACD)
+useMacdConfirmation = input.bool(false, "Use MACD Confirmation", group=GP_MACD)
 macdFastLength = input.int(12, "MACD Fast Length", group=GP_MACD)
 macdSlowLength = input.int(26, "MACD Slow Length", group=GP_MACD)
 macdSignalLength = input.int(9, "MACD Signal Length", group=GP_MACD)
@@ -211,6 +214,10 @@ k = ta.stoch(close, high, low, stochLength)
 macdBullish = histLine > 0
 macdBearish = histLine < 0
 
+// Volume filter
+volumeThreshold = ta.sma(volume, 20) * minVolume
+volumeOk = not useVolumeFilter or volume > volumeThreshold
+
 // === Trend & Filters ===
 isInNoTradeZone = useNoTradeZone and close > math.min(ema40, ema80) and close < math.max(ema40, ema80)
 isInTradeZone = not isInNoTradeZone
@@ -252,6 +259,11 @@ check123(c1, c2, c3) =>
 check123EmaCross(isBullish) =>
     if not useEmaCrossRules
         true
+    else if enableAllEmaCross
+        candle0CrossesEma9 = isBullish ? crossesAbove(open, close, ema9) : crossesBelow(open, close, ema9)
+        candle0CrossesEma40 = isBullish ? crossesAbove(open, close, ema40) : crossesBelow(open, close, ema40)
+        candle0CrossesEma80 = isBullish ? crossesAbove(open, close, ema80) : crossesBelow(open, close, ema80)
+        candle0CrossesEma9 and candle0CrossesEma40 and candle0CrossesEma80
     else
         candle0CrossesEma9 = isBullish ? crossesAbove(open, close, ema9) : crossesBelow(open, close, ema9)
         noEma40Cross0 = not crossesEma(open, close, ema40)
@@ -261,6 +273,11 @@ check123EmaCross(isBullish) =>
 checkPFREmaCross(isBullish) =>
     if not useEmaCrossRules
         true
+    else if enableAllEmaCross
+        candle0CrossesEma9 = isBullish ? crossesAbove(open, close, ema9) : crossesBelow(open, close, ema9)
+        candle0CrossesEma40 = isBullish ? crossesAbove(open, close, ema40) : crossesBelow(open, close, ema40)
+        candle0CrossesEma80 = isBullish ? crossesAbove(open, close, ema80) : crossesBelow(open, close, ema80)
+        candle0CrossesEma9 and candle0CrossesEma40 and candle0CrossesEma80
     else
         candle0CrossesEma9 = isBullish ? crossesAbove(open, close, ema9) : crossesBelow(open, close, ema9)
         noEma40Cross0 = not crossesEma(open, close, ema40)
@@ -270,6 +287,11 @@ checkPFREmaCross(isBullish) =>
 checkEngulfingEmaCross(isBullish) =>
     if not useEmaCrossRules
         true
+    else if enableAllEmaCross
+        candle0CrossesEma9 = isBullish ? crossesAbove(open, close, ema9) : crossesBelow(open, close, ema9)
+        candle0CrossesEma40 = isBullish ? crossesAbove(open, close, ema40) : crossesBelow(open, close, ema40)
+        candle0CrossesEma80 = isBullish ? crossesAbove(open, close, ema80) : crossesBelow(open, close, ema80)
+        candle0CrossesEma9 and candle0CrossesEma40 and candle0CrossesEma80
     else
         candle0CrossesEma9 = isBullish ? crossesAbove(open, close, ema9) : crossesBelow(open, close, ema9)
         noEma40Cross = not crossesEma(open, close, ema40)
@@ -320,8 +342,8 @@ bullishEngulfWithEma = enableEngulfing and isBullEngulf and checkEngulfingEmaCro
 bearishEngulfWithEma = enableEngulfing and isBearEngulf and checkEngulfingEmaCross(false)
 
 // Final entry conditions
-longCondition = enableLong and trendOkBull and stochOkBull and tradeDate and inSession and isInTradeZone and (not useMacdConfirmation or macdBullish) and ((enable123 and bullish123WithEma) or (enablePFR and bullishPFRWithEma) or (enableEngulfing and bullishEngulfWithEma))
-shortCondition = enableShort and trendOkBear and stochOkBear and tradeDate and inSession and isInTradeZone and (not useMacdConfirmation or macdBearish) and ((enable123 and bearish123WithEma) or (enablePFR and bearishPFRWithEma) or (enableEngulfing and bearishEngulfWithEma))
+longCondition = enableLong and trendOkBull and stochOkBull and tradeDate and inSession and isInTradeZone and volumeOk and (not useMacdConfirmation or macdBullish) and ((enable123 and bullish123WithEma) or (enablePFR and bullishPFRWithEma) or (enableEngulfing and bullishEngulfWithEma))
+shortCondition = enableShort and trendOkBear and stochOkBear and tradeDate and inSession and isInTradeZone and volumeOk and (not useMacdConfirmation or macdBearish) and ((enable123 and bearish123WithEma) or (enablePFR and bearishPFRWithEma) or (enableEngulfing and bearishEngulfWithEma))
 
 // === Pattern Label Construction ===
 getPatternText() =>
@@ -373,6 +395,7 @@ buildReasons(isLong) =>
     r := r + (not inSession ? "❌ Session\n" : "✅ Session\n")
     r := r + (isLong ? not enableLong ? "❌ Long Disabled\n" : "✅ Long Enabled\n" : not enableShort ? "❌ Short Disabled\n" : "✅ Short Enabled\n")
     r := r + (isInNoTradeZone ? "❌ In No Trade Zone (EMA40-80)\n" : "✅ Clear Trading Zone\n")
+    r := r + (not volumeOk ? "❌ Volume Filter\n" : "✅ Volume Filter\n")
     
     // Add MACD confirmation status
     if useMacdConfirmation
