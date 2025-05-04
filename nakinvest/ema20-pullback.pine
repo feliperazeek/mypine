@@ -73,6 +73,13 @@ strategy("NakInvest - EMA Pullback Strategy", overlay=true, default_qty_type=str
 enableLong = input.bool(true, "Enable Long Positions", group="Position Settings")
 enableShort = input.bool(true, "Enable Short Positions", group="Position Settings")
 
+// MACD Settings
+useMacdFilter = input.bool(false, "Use MACD Filter", group="MACD Settings")
+macdFastLength = input.int(12, "MACD Fast Length", minval=1, group="MACD Settings")
+macdSlowLength = input.int(26, "MACD Slow Length", minval=1, group="MACD Settings")
+macdSignalLength = input.int(9, "MACD Signal Length", minval=1, group="MACD Settings")
+macdMinSize = input.float(0, "Minimum MACD Size", minval=0, step=0.0001, group="MACD Settings", tooltip="Minimum size of MACD histogram for confirmation. 0 means any size.")
+
 // EMA Settings
 emaLength = input.int(9, "EMA Length", minval=1)
 ema200Length = input.int(200, "EMA200 Length", minval=1, group="Trend Filter")
@@ -83,13 +90,14 @@ useTrendFilter = input.bool(true, "Use Trend Filter", group="Filters")
 showDebug = input.bool(true, "Show Debug Info", group="Debug Settings")
 
 // Pullback Settings
-pullbackPct = input.float(0.1, "Pullback Percentage", minval=0.01, step=0.01, group="Pullback Settings")
+pullbackPct = input.float(0.001, "Pullback Percentage", minval=0.001, step=0.001, group="Pullback Settings")
 candleSizeType = input.string("Percentage", "Candle Size Type", options=["Absolute", "Percentage"], group="Pullback Settings")
 minCandleSize = input.float(0.5, "Minimum Candle Size", minval=0.01, step=0.01, tooltip="For Absolute: size in price units\nFor Percentage: size as % of price", group="Pullback Settings")
 
 // Risk Management
 slType = input.string("Below Candle Wick", "Stop Loss Type", options=["Below Candle Wick", "Percentage"], group="Risk Management")
 slPercent = input.float(1.0, "Stop Loss %", minval=0.1, step=0.1, group="Risk Management")
+slBuffer = input.float(0.0, "Stop Loss Buffer %", minval=0.0, maxval=100.0, step=0.1, tooltip="Additional buffer % to add to stop loss when using Below Candle Wick mode. 0 means no buffer.", group="Risk Management")
 tpType = input.string("RR-Based", "Take Profit Type", options=["RR-Based", "Percentage", "EMA Cross"], group="Risk Management")
 tpPercent = input.float(1.0, "Take Profit %", minval=0.1, step=0.1, group="Risk Management")
 rrRatio = input.float(2.0, "Risk/Reward Ratio", minval=0.5, step=0.1, group="Risk Management")
@@ -122,6 +130,12 @@ getCandleSize() =>
 candleSize = getCandleSize()
 isBullishCandle = close > open
 isBearishCandle = close < open
+
+// MACD
+[macdLine, signalLine, histLine] = ta.macd(close, macdFastLength, macdSlowLength, macdSignalLength)
+isMacdBullish = histLine > 0 and math.abs(histLine) >= macdMinSize
+isMacdBearish = histLine < 0 and math.abs(histLine) >= macdMinSize
+macdOk = not useMacdFilter or (isBullishCandle and isMacdBullish) or (isBearishCandle and isMacdBearish)
 
 // Calculate pullback distance
 pullbackDistance = (high - ema20) / ema20 * 100
@@ -175,18 +189,18 @@ bearishPullback = enableShort and
                   stochOk
 
 // === Entry Conditions ===
-longCondition = bullishPullback and (not useTrendFilter or isBullishTrend) and volumeOk
-shortCondition = bearishPullback and (not useTrendFilter or isBearishTrend) and volumeOk
+longCondition = bullishPullback and (not useTrendFilter or isBullishTrend) and volumeOk and macdOk
+shortCondition = bearishPullback and (not useTrendFilter or isBearishTrend) and volumeOk and macdOk
 
 // === Risk Management Calculations ===
 // Stop Loss
 bullSL = slType == "Percentage" ? 
          high * (1 - slPercent / 100) : 
-         math.min(low, low[1], low[2]) - syminfo.mintick
+         (math.min(low, low[1], low[2]) - syminfo.mintick) * (1 - slBuffer / 100)
 
 bearSL = slType == "Percentage" ? 
          low * (1 + slPercent / 100) : 
-         math.max(high, high[1], high[2]) + syminfo.mintick
+         (math.max(high, high[1], high[2]) + syminfo.mintick) * (1 + slBuffer / 100)
 
 // Entry Prices
 longEntry = high + syminfo.mintick
@@ -220,6 +234,13 @@ if (showDebug and candleCrossesEma and not longCondition and not shortCondition)
     debugMessage := debugMessage + "📐 EMA Distance: " + str.tostring(emaDistance) + "%\n"
     if useStochFilter
         debugMessage := debugMessage + "📉 Stochastic K: " + str.tostring(stochK) + "\n"
+    if useMacdFilter
+        debugMessage := debugMessage + "📊 MACD Hist: " + str.tostring(histLine) + "\n"
+    debugMessage := debugMessage + "🛑 Stop Loss Type: " + slType + "\n"
+    if slType == "Below Candle Wick"
+        debugMessage := debugMessage + "🛑 Stop Loss Buffer: " + str.tostring(slBuffer) + "%\n"
+    else
+        debugMessage := debugMessage + "🛑 Stop Loss %: " + str.tostring(slPercent) + "%\n"
     
     // Check bullish conditions
     if (isBullishCandle and low <= ema20 and close > ema20)
@@ -238,6 +259,8 @@ if (showDebug and candleCrossesEma and not longCondition and not shortCondition)
             debugMessage := debugMessage + "\n❌ Volume too low (" + str.tostring(volume) + " < " + str.tostring(volumeThreshold) + ")"
         if (useStochFilter and stochK >= stochOversold)
             debugMessage := debugMessage + "\n❌ Stochastic not oversold (K: " + str.tostring(stochK) + " >= " + str.tostring(stochOversold) + ")"
+        if (useMacdFilter and not isMacdBullish)
+            debugMessage := debugMessage + "\n❌ MACD not bullish (Hist: " + str.tostring(histLine) + " < " + str.tostring(macdMinSize) + ")"
         
         label.new(bar_index, low, "💡", color=color.new(color.green, 70), style=label.style_label_up, textcolor=color.white, size=size.small, tooltip=debugMessage)
     
@@ -258,6 +281,8 @@ if (showDebug and candleCrossesEma and not longCondition and not shortCondition)
             debugMessage := debugMessage + "\n❌ Volume too low (" + str.tostring(volume) + " < " + str.tostring(volumeThreshold) + ")"
         if (useStochFilter and stochK <= stochOverbought)
             debugMessage := debugMessage + "\n❌ Stochastic not overbought (K: " + str.tostring(stochK) + " <= " + str.tostring(stochOverbought) + ")"
+        if (useMacdFilter and not isMacdBearish)
+            debugMessage := debugMessage + "\n❌ MACD not bearish (Hist: " + str.tostring(histLine) + " > -" + str.tostring(macdMinSize) + ")"
         
         label.new(bar_index, high, "💡", color=color.new(color.red, 70), style=label.style_label_down, textcolor=color.white, size=size.small, tooltip=debugMessage)
 
@@ -272,6 +297,8 @@ if (longCondition and enableLong)
     longTooltip := longTooltip + "📐 EMA Distance: " + str.tostring(emaDistance) + "%\n"
     if useStochFilter
         longTooltip := longTooltip + "📉 Stochastic K: " + str.tostring(stochK) + "\n"
+    if useMacdFilter
+        longTooltip := longTooltip + "📊 MACD Hist: " + str.tostring(histLine) + "\n"
     longTooltip := longTooltip + "\n💰 Entry: " + str.tostring(longEntry) + "\n"
     longTooltip := longTooltip + "🛑 Stop Loss: " + str.tostring(bullSL) + "\n"
     if (tpType != "EMA Cross")
@@ -279,7 +306,9 @@ if (longCondition and enableLong)
     else
         longTooltip := longTooltip + "🎯 Take Profit: EMA Cross\n"
     longTooltip := longTooltip + "📊 Risk/Reward: " + str.tostring(rrRatio) + "\n"
-    longTooltip := longTooltip + "📋 Order Type: " + (slType == "Percentage" ? "Stop Loss %: " + str.tostring(slPercent) + "%" : "Below Candle Wick") + "\n"
+    longTooltip := longTooltip + "📋 Order Type: " + (slType == "Percentage" ? 
+        "Stop Loss %: " + str.tostring(slPercent) + "%" : 
+        "Below Candle Wick" + (slBuffer > 0 ? " + " + str.tostring(slBuffer) + "% buffer" : "")) + "\n"
     longTooltip := longTooltip + "📋 Take Profit Type: " + (tpType == "RR-Based" ? "R:R Based" : tpType == "Percentage" ? "Percentage: " + str.tostring(tpPercent) + "%" : "EMA Cross")
     
     label.new(bar_index, low, "🔼", color=color.new(color.green, 70), style=label.style_label_up, textcolor=color.white, size=size.small, tooltip=longTooltip)
@@ -294,6 +323,8 @@ if (shortCondition and enableShort)
     shortTooltip := shortTooltip + "📐 EMA Distance: " + str.tostring(emaDistance) + "%\n"
     if useStochFilter
         shortTooltip := shortTooltip + "📉 Stochastic K: " + str.tostring(stochK) + "\n"
+    if useMacdFilter
+        shortTooltip := shortTooltip + "📊 MACD Hist: " + str.tostring(histLine) + "\n"
     shortTooltip := shortTooltip + "\n💰 Entry: " + str.tostring(shortEntry) + "\n"
     shortTooltip := shortTooltip + "🛑 Stop Loss: " + str.tostring(bearSL) + "\n"
     if (tpType != "EMA Cross")
@@ -301,7 +332,9 @@ if (shortCondition and enableShort)
     else
         shortTooltip := shortTooltip + "🎯 Take Profit: EMA Cross\n"
     shortTooltip := shortTooltip + "📊 Risk/Reward: " + str.tostring(rrRatio) + "\n"
-    shortTooltip := shortTooltip + "📋 Order Type: " + (slType == "Percentage" ? "Stop Loss %: " + str.tostring(slPercent) + "%" : "Above Candle Wick") + "\n"
+    shortTooltip := shortTooltip + "📋 Order Type: " + (slType == "Percentage" ? 
+        "Stop Loss %: " + str.tostring(slPercent) + "%" : 
+        "Above Candle Wick" + (slBuffer > 0 ? " + " + str.tostring(slBuffer) + "% buffer" : "")) + "\n"
     shortTooltip := shortTooltip + "📋 Take Profit Type: " + (tpType == "RR-Based" ? "R:R Based" : tpType == "Percentage" ? "Percentage: " + str.tostring(tpPercent) + "%" : "EMA Cross")
     
     label.new(bar_index, high, "🔽", color=color.new(color.red, 70), style=label.style_label_down, textcolor=color.white, size=size.small, tooltip=shortTooltip)
