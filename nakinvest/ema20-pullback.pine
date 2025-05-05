@@ -306,9 +306,7 @@ if (longCondition and enableLong)
     else
         longTooltip := longTooltip + "🎯 Take Profit: EMA Cross\n"
     longTooltip := longTooltip + "📊 Risk/Reward: " + str.tostring(rrRatio) + "\n"
-    longTooltip := longTooltip + "📋 Order Type: " + (slType == "Percentage" ? 
-        "Stop Loss %: " + str.tostring(slPercent) + "%" : 
-        "Below Candle Wick" + (slBuffer > 0 ? " + " + str.tostring(slBuffer) + "% buffer" : "")) + "\n"
+    longTooltip := longTooltip + "📋 Order Type: " + (slType == "Percentage" ? "Stop Loss %: " + str.tostring(slPercent) + "%" : "Below Candle Wick" + (slBuffer > 0 ? " + " + str.tostring(slBuffer) + "% buffer" : "")) + "\n"
     longTooltip := longTooltip + "📋 Take Profit Type: " + (tpType == "RR-Based" ? "R:R Based" : tpType == "Percentage" ? "Percentage: " + str.tostring(tpPercent) + "%" : "EMA Cross")
     
     label.new(bar_index, low, "🔼", color=color.new(color.green, 70), style=label.style_label_up, textcolor=color.white, size=size.small, tooltip=longTooltip)
@@ -332,9 +330,7 @@ if (shortCondition and enableShort)
     else
         shortTooltip := shortTooltip + "🎯 Take Profit: EMA Cross\n"
     shortTooltip := shortTooltip + "📊 Risk/Reward: " + str.tostring(rrRatio) + "\n"
-    shortTooltip := shortTooltip + "📋 Order Type: " + (slType == "Percentage" ? 
-        "Stop Loss %: " + str.tostring(slPercent) + "%" : 
-        "Above Candle Wick" + (slBuffer > 0 ? " + " + str.tostring(slBuffer) + "% buffer" : "")) + "\n"
+    shortTooltip := shortTooltip + "📋 Order Type: " + (slType == "Percentage" ? "Stop Loss %: " + str.tostring(slPercent) + "%" : "Above Candle Wick" + (slBuffer > 0 ? " + " + str.tostring(slBuffer) + "% buffer" : "")) + "\n"
     shortTooltip := shortTooltip + "📋 Take Profit Type: " + (tpType == "RR-Based" ? "R:R Based" : tpType == "Percentage" ? "Percentage: " + str.tostring(tpPercent) + "%" : "EMA Cross")
     
     label.new(bar_index, high, "🔽", color=color.new(color.red, 70), style=label.style_label_down, textcolor=color.white, size=size.small, tooltip=shortTooltip)
