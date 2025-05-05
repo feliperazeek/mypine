@@ -66,35 +66,35 @@ var string GP_CANDLES = "Candle Size Configuration", GP_FILTERS = "Trading Filte
 
 // === Debug Configuration ===
 showPatternLabels = true
-showPFRDebug = input.bool(true, "Show PFR Debug", group=GP_DEBUG)
-show123Debug = input.bool(true, "Show 123 Debug", group=GP_DEBUG)
-showEngulfingDebug = input.bool(true, "Show Engulfing Debug", group=GP_DEBUG)
+showPFRDebug = input.bool(false, "Show PFR Debug", group=GP_DEBUG)
+show123Debug = input.bool(false, "Show 123 Debug", group=GP_DEBUG)
+showEngulfingDebug = input.bool(false, "Show Engulfing Debug", group=GP_DEBUG)
 useEmaCrossRules = input.bool(true, "Use EMA Cross Rules", group=GP_FILTERS, tooltip="When enabled, allows entries when price crosses ema 9 but not ema 40")
 enableAllEmaCross = input.bool(true, "Enable Bear Cross (all emas)", group=GP_FILTERS, tooltip="When enabled, allows entries when price crosses all EMAs, while still respecting other filters")
 
 // === Original Input Parameters (Grouped) ===
 minCandle1Size = input.float(0.1, "Min Candle 1 Size (absolute units)", minval=0.0001, group=GP_CANDLES)
 minCandle2Pct = input.float(0.1, "Min Candle 2 Body Size as % of Candle 1", minval=0.01, group=GP_CANDLES)
-maxCandle2Pct = input.float(1.0, "Max Candle 2 Body Size as % of Candle 1", minval=0.01, group=GP_CANDLES)
-minCandle3Pct = input.float(0.5, "Min Candle 3 Body Size as % of Candle 1", minval=0.01, group=GP_CANDLES)
-maxCandle3Pct = input.float(10.0, "Max Candle 3 Body Size as % of Candle 1", minval=0.01, group=GP_CANDLES)
+maxCandle2Pct = input.float(0.5, "Max Candle 2 Body Size as % of Candle 1", minval=0.01, group=GP_CANDLES)
+minCandle3Pct = input.float(0.6, "Min Candle 3 Body Size as % of Candle 1", minval=0.01, group=GP_CANDLES)
+maxCandle3Pct = input.float(1.5, "Max Candle 3 Body Size as % of Candle 1", minval=0.01, group=GP_CANDLES)
 
 // === Filters and Setup ===
 enableLong = input.bool(true, "Enable Long Positions", group=GP_FILTERS)
 enableShort = input.bool(true, "Enable Short Positions", group=GP_FILTERS)
 useTrendFilter = input.bool(true, "Use Trend Filter", group=GP_FILTERS)
-useNoTradeZone = input.bool(true, "Avoid Trading Between EMA40-EMA80", group=GP_FILTERS)
+useNoTradeZone = true
 useVolumeFilter = input.bool(false, "Use Volume Filter", group=GP_FILTERS)
 minVolume = input.float(1.5, "Minimum Volume Multiplier", minval=0.1, step=0.1, group=GP_FILTERS)
 
 // === Stochastic Configuration ===
-useStochFilter = input.bool(true, "Use Stochastic Filter", group=GP_STOCH)
+useStochFilter = input.bool(false, "Use Stochastic Filter", group=GP_STOCH)
 stochLength = input.int(21, "Stochastic Length", group=GP_STOCH)
 stochOverbought = input.float(50, "Stoch Overbought", group=GP_STOCH)
 stochOversold = input.float(50, "Stoch Oversold", group=GP_STOCH)
 
 // === Risk Management ===
-tpType = input.string("Percentage From Entry", "Take Profit Type", options=["RR-Based", "Percentage From Entry"], group=GP_RISK)
+tpType = input.string("RR-Based", "Take Profit Type", options=["RR-Based", "Percentage From Entry"], group=GP_RISK)
 profitTargetRR = input.float(1.0, "Take Profit Ratio (vs SL)", group=GP_RISK)
 tpPercent = input.float(1.0, "Take Profit % From Entry", group=GP_RISK)
 slType = input.string("Below Candle Wick", "Stop Loss Type", options=["Below Candle Body", "Below Candle Wick", "Percentage", "Lowest Low"], group=GP_RISK)
@@ -116,7 +116,8 @@ macdSlowLength = input.int(26, "MACD Slow Length", group=GP_MACD)
 macdSignalLength = input.int(9, "MACD Signal Length", group=GP_MACD)
 
 // === PFR Configuration ===
-pfrUseWicks = input.bool(true, "Use Wicks for PFR Detection", group=GP_PFR, tooltip="When enabled, uses candle wicks (high/low) for PFR detection. When disabled, uses candle bodies (open/close)")
+// pfrUseWicks = input.bool(true, "Use Wicks for PFR Detection", group=GP_PFR, tooltip="When enabled, uses candle wicks (high/low) for PFR detection. When disabled, uses candle bodies (open/close)")
+pfrUseWicks = false
 
 // === Helper Functions ===
 calcWinRate(wins, total) => total == 0 ? 0.0 : (wins / total) * 100
@@ -446,56 +447,6 @@ buildReasons(isLong) =>
             r := r + "    EMA40: " + str.tostring(ema40) + " No Cross: " + (noEma40Cross ? "✅" : "❌") + "\n"
             r := r + "    EMA80: " + str.tostring(ema80) + " No Cross: " + (noEma80Cross ? "✅" : "❌") + "\n"
             r := r + (checkEngulfingEmaCross(isLong) ? "✅ Engulfing EMA Cross\n" : "❌ Engulfing EMA Cross\n")
-    
-    // Add pattern detection details
-    r := r + "\nPattern Detection Details:\n"
-    
-    // 123 Pattern Details
-    if enable123
-        body1 = math.abs(close[2] - open[2])
-        body2 = math.abs(close[1] - open[1])
-        body3 = math.abs(close - open)
-        r := r + "123 Pattern:\n"
-        r := r + "  Candle 1 (2 bars ago):\n"
-        r := r + "    Open: " + str.tostring(open[2]) + " Close: " + str.tostring(close[2]) + "\n"
-        r := r + "    Body Size: " + str.tostring(body1) + " Min Required: " + str.tostring(minCandle1Size) + "\n"
-        r := r + "  Candle 2 (1 bar ago):\n"
-        r := r + "    Open: " + str.tostring(open[1]) + " Close: " + str.tostring(close[1]) + "\n"
-        r := r + "    Body Size: " + str.tostring(body2) + " Range: " + str.tostring(body1 * minCandle2Pct) + " to " + str.tostring(body1 * maxCandle2Pct) + "\n"
-        r := r + "  Candle 3 (current):\n"
-        r := r + "    Open: " + str.tostring(open) + " Close: " + str.tostring(close) + "\n"
-        r := r + "    Body Size: " + str.tostring(body3) + " Range: " + str.tostring(body1 * minCandle3Pct) + " to " + str.tostring(body1 * maxCandle3Pct) + "\n"
-        r := r + (bull123 or bear123 ? "✅ 123 Pattern Detected\n" : "❌ No 123 Pattern\n")
-    
-    // PFR Pattern Details
-    if enablePFR
-        r := r + "PFR Pattern:\n"
-        r := r + "  Current Candle:\n"
-        r := r + "    Open: " + str.tostring(open) + " Close: " + str.tostring(close) + "\n"
-        r := r + "    High: " + str.tostring(high) + " Low: " + str.tostring(low) + "\n"
-        r := r + "    Body Size: " + str.tostring(math.abs(close - open)) + "\n"
-        r := r + "  Previous Candle:\n"
-        r := r + "    Open: " + str.tostring(open[1]) + " Close: " + str.tostring(close[1]) + "\n"
-        r := r + "    High: " + str.tostring(high[1]) + " Low: " + str.tostring(low[1]) + "\n"
-        r := r + "    Body Size: " + str.tostring(math.abs(close[1] - open[1])) + "\n"
-        r := r + "  Two Bars Ago:\n"
-        r := r + "    Open: " + str.tostring(open[2]) + " Close: " + str.tostring(close[2]) + "\n"
-        r := r + "    High: " + str.tostring(high[2]) + " Low: " + str.tostring(low[2]) + "\n"
-        r := r + "    Body Size: " + str.tostring(math.abs(close[2] - open[2])) + "\n"
-        r := r + (bullishPFR or bearishPFR ? "✅ PFR Pattern Detected\n" : "❌ No PFR Pattern\n")
-    
-    // Engulfing Pattern Details
-    if enableEngulfing
-        r := r + "Engulfing Pattern:\n"
-        r := r + "  Current Candle:\n"
-        r := r + "    Open: " + str.tostring(open) + " Close: " + str.tostring(close) + "\n"
-        r := r + "    High: " + str.tostring(high) + " Low: " + str.tostring(low) + "\n"
-        r := r + "    Body Size: " + str.tostring(math.abs(close - open)) + "\n"
-        r := r + "  Previous Candle:\n"
-        r := r + "    Open: " + str.tostring(open[1]) + " Close: " + str.tostring(close[1]) + "\n"
-        r := r + "    High: " + str.tostring(high[1]) + " Low: " + str.tostring(low[1]) + "\n"
-        r := r + "    Body Size: " + str.tostring(math.abs(close[1] - open[1])) + "\n"
-        r := r + (isBullEngulf or isBearEngulf ? "✅ Engulfing Pattern Detected\n" : "❌ No Engulfing Pattern\n")
     
     // Add entry condition status
     r := r + "\nEntry Conditions:\n"
@@ -837,13 +788,13 @@ buildEngulfingDebugDetails() =>
     
     r := r + "Engulfing Conditions:\n"
     
-    if bullishCandle()
+    if bullishCandle
         r := r + "  Previous Bearish: " + (prevClose < prevOpen ? "✅" : "❌") + "\n"
         r := r + "  Current Bullish: " + (currClose > currOpen ? "✅" : "❌") + "\n"
         r := r + "  Engulfs Body: " + (currOpen <= prevClose and currClose >= prevOpen ? "✅" : "❌") + "\n"
         r := r + "    Current Open <= Previous Close: " + (currOpen <= prevClose ? "✅" : "❌") + "\n"
         r := r + "    Current Close >= Previous Open: " + (currClose >= prevOpen ? "✅" : "❌") + "\n"
-    else if bearishCandle()
+    else if bearishCandle
         r := r + "  Previous Bullish: " + (prevClose > prevOpen ? "✅" : "❌") + "\n"
         r := r + "  Current Bearish: " + (currClose < currOpen ? "✅" : "❌") + "\n"
         r := r + "  Engulfs Body: " + (currOpen >= prevClose and currClose <= prevOpen ? "✅" : "❌") + "\n"
