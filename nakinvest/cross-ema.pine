@@ -825,41 +825,34 @@ buildEngulfingDebugDetails() =>
     r = ""
     prevOpen = open[1]
     prevClose = close[1]
-    prevHigh = high[1]
-    prevLow = low[1]
     currOpen = open
     currClose = close
-    currHigh = high
-    currLow = low
     
     r := r + "Engulfing Pattern Analysis:\n"
     r := r + "Current Candle:\n"
-    r := r + "  Open: " + str.tostring(currOpen) + " Close: " + str.tostring(currClose) + "\n"
-    r := r + "  High: " + str.tostring(currHigh) + " Low: " + str.tostring(currLow) + "\n"
     r := r + "  Body Size: " + str.tostring(math.abs(currClose - currOpen)) + "\n"
-    r := r + "  Direction: " + (currClose > currOpen ? "Bullish" : "Bearish") + "\n\n"
     
     r := r + "Previous Candle:\n"
-    r := r + "  Open: " + str.tostring(prevOpen) + " Close: " + str.tostring(prevClose) + "\n"
-    r := r + "  High: " + str.tostring(prevHigh) + " Low: " + str.tostring(prevLow) + "\n"
     r := r + "  Body Size: " + str.tostring(math.abs(prevClose - prevOpen)) + "\n"
-    r := r + "  Direction: " + (prevClose > prevOpen ? "Bullish" : "Bearish") + "\n\n"
     
     r := r + "Engulfing Conditions:\n"
-    prevBearish = prevClose < prevOpen
-    currBullish = currClose > currOpen
-    engulfsBody = currOpen <= prevClose and currClose >= prevOpen
     
-    prevBullish = prevClose > prevOpen
-    currBearish = currClose < currOpen
+    if bullishCandle()
+        r := r + "  Previous Bearish: " + (prevClose < prevOpen ? "✅" : "❌") + "\n"
+        r := r + "  Current Bullish: " + (currClose > currOpen ? "✅" : "❌") + "\n"
+        r := r + "  Engulfs Body: " + (currOpen <= prevClose and currClose >= prevOpen ? "✅" : "❌") + "\n"
+        r := r + "    Current Open <= Previous Close: " + (currOpen <= prevClose ? "✅" : "❌") + "\n"
+        r := r + "    Current Close >= Previous Open: " + (currClose >= prevOpen ? "✅" : "❌") + "\n"
+    else if bearishCandle()
+        r := r + "  Previous Bullish: " + (prevClose > prevOpen ? "✅" : "❌") + "\n"
+        r := r + "  Current Bearish: " + (currClose < currOpen ? "✅" : "❌") + "\n"
+        r := r + "  Engulfs Body: " + (currOpen >= prevClose and currClose <= prevOpen ? "✅" : "❌") + "\n"
+        r := r + "    Current Open >= Previous Close: " + (currOpen >= prevClose ? "✅" : "❌") + "\n"
+        r := r + "    Current Close <= Previous Open: " + (currClose <= prevOpen ? "✅" : "❌") + "\n"
+    else
+        r := r + "  No Engulfing Pattern Detected\n"
     
-    r := r + "  Previous Bearish: " + (prevBearish ? "✅" : "❌") + "\n"
-    r := r + "  Current Bullish: " + (currBullish ? "✅" : "❌") + "\n"
-    r := r + "  Engulfs Body: " + (engulfsBody ? "✅" : "❌") + "\n"
-    r := r + "    Current Open <= Previous Close: " + (currOpen <= prevClose ? "✅" : "❌") + "\n"
-    r := r + "    Current Close >= Previous Open: " + (currClose >= prevOpen ? "✅" : "❌") + "\n\n"
-    
-    r := r + "Engulfing Pattern: " + ((prevBearish and currBullish and engulfsBody) or (prevBullish and currBearish and engulfsBody) ? "✅" : "❌")
+    r := r + "\nEngulfing Pattern: " + (isBullishEngulfing() or isBearishEngulfing() ? "✅" : "❌")
     r
 
 // Show debug tooltips for each pattern type
