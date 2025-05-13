@@ -832,3 +832,86 @@ if showEngulfingDebug
              style=label.style_label_down, 
              textcolor=color.white,
              tooltip=buildEngulfingDebugDetails())
+
+// === Pattern Background Coloring ===
+var line pfrTopLine = na
+var line pfrBottomLine = na
+var linefill pfrFill = na
+var line pfrTopLine2 = na
+var line pfrBottomLine2 = na
+
+var line pattern123TopLine = na
+var line pattern123BottomLine = na
+var linefill pattern123Fill = na
+var line pattern123TopLine2 = na
+var line pattern123BottomLine2 = na
+
+var line engulfingTopLine = na
+var line engulfingBottomLine = na
+var linefill engulfingFill = na
+var line engulfingTopLine2 = na
+var line engulfingBottomLine2 = na
+
+// PFR Pattern Background
+if bullishPFR
+    pfrTopLine := line.new(bar_index[2], high[2], bar_index, high[2], color=color.new(color.green, 53))
+    pfrBottomLine := line.new(bar_index[1], math.min(low[1], low), bar_index, math.min(low[1], low), color=color.new(color.green, 53))
+    pfrFill := linefill.new(pfrTopLine, pfrBottomLine, color.new(color.green, 73))
+    
+    pfrTopLine2 := line.new(bar_index[2], high[2], bar_index, high[2], color=color.new(color.green, 53))
+    pfrBottomLine2 := line.new(bar_index[1], math.min(low[1], low), bar_index, math.min(low[1], low), color=color.new(color.green, 53))
+
+if bearishPFR
+    pfrTopLine := line.new(bar_index[1], math.max(high[1], high), bar_index, math.max(high[1], high), color=color.new(color.red, 53))
+    pfrBottomLine := line.new(bar_index[2], low[2], bar_index, low[2], color=color.new(color.red, 53))
+    pfrFill := linefill.new(pfrTopLine, pfrBottomLine, color.new(color.red, 73))
+    
+    pfrTopLine2 := line.new(bar_index[1], math.max(high[1], high), bar_index, math.max(high[1], high), color=color.new(color.red, 53))
+    pfrBottomLine2 := line.new(bar_index[2], low[2], bar_index, low[2], color=color.new(color.red, 53))
+
+// 123 Pattern Background
+if bull123
+    pattern123TopLine := line.new(bar_index[2], high[2], bar_index, high[2], color=color.new(color.green, 53))
+    pattern123BottomLine := line.new(bar_index[1], math.min(low[1], low), bar_index, math.min(low[1], low), color=color.new(color.green, 53))
+    pattern123Fill := linefill.new(pattern123TopLine, pattern123BottomLine, color.new(color.green, 73))
+    
+    pattern123TopLine2 := line.new(bar_index[2], high[2], bar_index, high[2], color=color.new(color.green, 53))
+    pattern123BottomLine2 := line.new(bar_index[1], math.min(low[1], low), bar_index, math.min(low[1], low), color=color.new(color.green, 53))
+
+if bear123
+    pattern123TopLine := line.new(bar_index[1], math.max(high[1], high), bar_index, math.max(high[1], high), color=color.new(color.red, 53))
+    pattern123BottomLine := line.new(bar_index[2], low[2], bar_index, low[2], color=color.new(color.red, 53))
+    pattern123Fill := linefill.new(pattern123TopLine, pattern123BottomLine, color.new(color.red, 73))
+    
+    pattern123TopLine2 := line.new(bar_index[1], math.max(high[1], high), bar_index, math.max(high[1], high), color=color.new(color.red, 53))
+    pattern123BottomLine2 := line.new(bar_index[2], low[2], bar_index, low[2], color=color.new(color.red, 53))
+
+// Engulfing Pattern Background
+if isBullEngulf
+    engulfingTopLine := line.new(bar_index[1], high[1], bar_index, high, color=color.new(color.green, 53))
+    engulfingBottomLine := line.new(bar_index[1], low[1], bar_index, low, color=color.new(color.green, 53))
+    engulfingFill := linefill.new(engulfingTopLine, engulfingBottomLine, color.new(color.green, 73))
+    
+    engulfingTopLine2 := line.new(bar_index[1], high[1], bar_index, high, color=color.new(color.green, 53))
+    engulfingBottomLine2 := line.new(bar_index[1], low[1], bar_index, low, color=color.new(color.green, 53))
+
+if isBearEngulf
+    engulfingTopLine := line.new(bar_index[1], high[1], bar_index, high, color=color.new(color.red, 53))
+    engulfingBottomLine := line.new(bar_index[1], low[1], bar_index, low, color=color.new(color.red, 53))
+    engulfingFill := linefill.new(engulfingTopLine, engulfingBottomLine, color.new(color.red, 73))
+    
+    engulfingTopLine2 := line.new(bar_index[1], high[1], bar_index, high, color=color.new(color.red, 53))
+    engulfingBottomLine2 := line.new(bar_index[1], low[1], bar_index, low, color=color.new(color.red, 53))
+
+// Update line positions for all patterns
+if not na(pfrTopLine)
+    pfrTopLine2.set_x2(bar_index)
+    pfrBottomLine2.set_x2(bar_index)
+
+if not na(pattern123TopLine)
+    pattern123TopLine2.set_x2(bar_index)
+    pattern123BottomLine2.set_x2(bar_index)
+
+if not na(engulfingTopLine)
+    engulfingTopLine2.set_x2(bar_index)
+    engulfingBottomLine2.set_x2(bar_index)
