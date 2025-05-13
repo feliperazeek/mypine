@@ -185,13 +185,23 @@ isBearishPFR() =>
     prevTwoGreen = close[2] > open[2]  // Candle 2 must be green
     makesNewHigh and closesBelowPrev and bodyLargerThanPrev and currBearish and prevTwoGreen
 
+// === EMA/SMA Configuration ===
+maGroup = "Moving Average Settings"
+maType = input.string("EMA", "MA Type", options=["EMA", "SMA"], group=maGroup)
+fastLength = input.int(9, "Fast MA Length", minval=1, group=maGroup)
+mediumLength = input.int(40, "Medium MA Length", minval=1, group=maGroup)
+slowLength = input.int(80, "Slow MA Length", minval=1, group=maGroup)
+
 // === Technical Indicators ===
-ema9 = ta.ema(close, 9)
-ema40 = ta.ema(close, 40)
-ema80 = ta.ema(close, 80)
-plot(ema9, color=color.blue)
-plot(ema40, color=color.green)
-plot(ema80, color=color.red)
+fastMA = maType == "EMA" ? ta.ema(close, fastLength) : ta.sma(close, fastLength)
+mediumMA = maType == "EMA" ? ta.ema(close, mediumLength) : ta.sma(close, mediumLength)
+slowMA = maType == "EMA" ? ta.ema(close, slowLength) : ta.sma(close, slowLength)
+
+plot(fastMA, color=color.blue, title="Fast MA")
+plot(mediumMA, color=color.green, title="Medium MA")
+plot(slowMA, color=color.red, title="Slow MA")
+
+// Stochastic
 k = ta.stoch(close, high, low, stochLength)
 
 // MACD
@@ -204,10 +214,10 @@ volumeThreshold = ta.sma(volume, 20) * minVolume
 volumeOk = not useVolumeFilter or volume > volumeThreshold
 
 // === Trend & Filters ===
-isInNoTradeZone = useNoTradeZone and close > math.min(ema40, ema80) and close < math.max(ema40, ema80)
+isInNoTradeZone = useNoTradeZone and close > math.min(mediumMA, slowMA) and close < math.max(mediumMA, slowMA)
 isInTradeZone = not isInNoTradeZone
-trendOkBull = not useTrendFilter or (ema9 > ema40 and ema40 > ema80)
-trendOkBear = not useTrendFilter or (ema80 > ema40 and ema40 > ema9)
+trendOkBull = not useTrendFilter or (fastMA > mediumMA and mediumMA > slowMA)
+trendOkBear = not useTrendFilter or (slowMA > mediumMA and mediumMA > fastMA)
 stochOkBull = not useStochFilter or k < stochOversold
 stochOkBear = not useStochFilter or k > stochOverbought
 
@@ -244,55 +254,47 @@ check123EmaCross(isBullish) =>
     if not useEmaCrossRules
         true
     else
-        candle0CrossesEma9 = isBullish ? crossesAbove(open, close, ema9) : crossesBelow(open, close, ema9)
-        noEma40Cross0 = not crossesEma(open, close, ema40)
-        noEma80Cross0 = not crossesEma(open, close, ema80)
+        candle0CrossesFastMA = isBullish ? crossesAbove(open, close, fastMA) : crossesBelow(open, close, fastMA)
+        noMediumMACross0 = not crossesEma(open, close, mediumMA)
+        noSlowMACross0 = not crossesEma(open, close, slowMA)
         
-        // Check if all EMAs cross
-        candle0CrossesEma40 = isBullish ? crossesAbove(open, close, ema40) : crossesBelow(open, close, ema40)
-        candle0CrossesEma80 = isBullish ? crossesAbove(open, close, ema80) : crossesBelow(open, close, ema80)
-        allEmasCross = candle0CrossesEma9 and candle0CrossesEma40 and candle0CrossesEma80
+        // Check if all MAs cross
+        candle0CrossesMediumMA = isBullish ? crossesAbove(open, close, mediumMA) : crossesBelow(open, close, mediumMA)
+        candle0CrossesSlowMA = isBullish ? crossesAbove(open, close, slowMA) : crossesBelow(open, close, slowMA)
+        allMAsCross = candle0CrossesFastMA and candle0CrossesMediumMA and candle0CrossesSlowMA
         
         // Entry is valid if either:
-        // 1. Only EMA9 crosses and no other EMAs cross (original logic)
-        // 2. All EMAs cross (new logic)
-        (candle0CrossesEma9 and noEma40Cross0 and noEma80Cross0) or (enableAllEmaCross and allEmasCross)
+        // 1. Only Fast MA crosses and no other MAs cross (original logic)
+        // 2. All MAs cross (new logic)
+        (candle0CrossesFastMA and noMediumMACross0 and noSlowMACross0) or (enableAllEmaCross and allMAsCross)
 
 checkPFREmaCross(isBullish) =>
     if not useEmaCrossRules
         true
     else
-        candle0CrossesEma9 = isBullish ? crossesAbove(open, close, ema9) : crossesBelow(open, close, ema9)
-        noEma40Cross0 = not crossesEma(open, close, ema40)
-        noEma80Cross0 = not crossesEma(open, close, ema80)
+        candle0CrossesFastMA = isBullish ? crossesAbove(open, close, fastMA) : crossesBelow(open, close, fastMA)
+        noMediumMACross0 = not crossesEma(open, close, mediumMA)
+        noSlowMACross0 = not crossesEma(open, close, slowMA)
         
-        // Check if all EMAs cross
-        candle0CrossesEma40 = isBullish ? crossesAbove(open, close, ema40) : crossesBelow(open, close, ema40)
-        candle0CrossesEma80 = isBullish ? crossesAbove(open, close, ema80) : crossesBelow(open, close, ema80)
-        allEmasCross = candle0CrossesEma9 and candle0CrossesEma40 and candle0CrossesEma80
+        candle0CrossesMediumMA = isBullish ? crossesAbove(open, close, mediumMA) : crossesBelow(open, close, mediumMA)
+        candle0CrossesSlowMA = isBullish ? crossesAbove(open, close, slowMA) : crossesBelow(open, close, slowMA)
+        allMAsCross = candle0CrossesFastMA and candle0CrossesMediumMA and candle0CrossesSlowMA
         
-        // Entry is valid if either:
-        // 1. Only EMA9 crosses and no other EMAs cross (original logic)
-        // 2. All EMAs cross (new logic)
-        (candle0CrossesEma9 and noEma40Cross0 and noEma80Cross0) or (enableAllEmaCross and allEmasCross)
+        (candle0CrossesFastMA and noMediumMACross0 and noSlowMACross0) or (enableAllEmaCross and allMAsCross)
 
 checkEngulfingEmaCross(isBullish) =>
     if not useEmaCrossRules
         true
     else
-        candle0CrossesEma9 = isBullish ? crossesAbove(open, close, ema9) : crossesBelow(open, close, ema9)
-        noEma40Cross = not crossesEma(open, close, ema40)
-        noEma80Cross = not crossesEma(open, close, ema80)
+        candle0CrossesFastMA = isBullish ? crossesAbove(open, close, fastMA) : crossesBelow(open, close, fastMA)
+        noMediumMACross = not crossesEma(open, close, mediumMA)
+        noSlowMACross = not crossesEma(open, close, slowMA)
         
-        // Check if all EMAs cross
-        candle0CrossesEma40 = isBullish ? crossesAbove(open, close, ema40) : crossesBelow(open, close, ema40)
-        candle0CrossesEma80 = isBullish ? crossesAbove(open, close, ema80) : crossesBelow(open, close, ema80)
-        allEmasCross = candle0CrossesEma9 and candle0CrossesEma40 and candle0CrossesEma80
+        candle0CrossesMediumMA = isBullish ? crossesAbove(open, close, mediumMA) : crossesBelow(open, close, mediumMA)
+        candle0CrossesSlowMA = isBullish ? crossesAbove(open, close, slowMA) : crossesBelow(open, close, slowMA)
+        allMAsCross = candle0CrossesFastMA and candle0CrossesMediumMA and candle0CrossesSlowMA
         
-        // Entry is valid if either:
-        // 1. Only EMA9 crosses and no other EMAs cross (original logic)
-        // 2. All EMAs cross (new logic)
-        (candle0CrossesEma9 and noEma40Cross and noEma80Cross) or (enableAllEmaCross and allEmasCross)
+        (candle0CrossesFastMA and noMediumMACross and noSlowMACross) or (enableAllEmaCross and allMAsCross)
 
 // === Helper Functions for Price Comparisons ===
 isBullishCandle(candleOpen, candleClose) => candleClose > candleOpen
@@ -336,21 +338,21 @@ bearishPFR = enablePFR and isBearishPFR()
 
 // === Entry Condition Variables ===
 // Pattern with EMA conditions
-bullish123WithEma = enable123 and bull123 and (not useEmaCrossRules or crossesAbove(open, close, ema9))
-bearish123WithEma = enable123 and bear123 and (not useEmaCrossRules or crossesBelow(open, close, ema9))
-bullishPFRWithEma = enablePFR and bullishPFR and (not useEmaCrossRules or crossesAbove(open, close, ema9))
-bearishPFRWithEma = enablePFR and bearishPFR and (not useEmaCrossRules or crossesBelow(open, close, ema9))
-bullishEngulfWithEma = enableEngulfing and isBullEngulf and (not useEmaCrossRules or crossesAbove(open, close, ema9))
-bearishEngulfWithEma = enableEngulfing and isBearEngulf and (not useEmaCrossRules or crossesBelow(open, close, ema9))
+bullish123WithEma = enable123 and bull123 and (not useEmaCrossRules or crossesAbove(open, close, fastMA))
+bearish123WithEma = enable123 and bear123 and (not useEmaCrossRules or crossesBelow(open, close, fastMA))
+bullishPFRWithEma = enablePFR and bullishPFR and (not useEmaCrossRules or crossesAbove(open, close, fastMA))
+bearishPFRWithEma = enablePFR and bearishPFR and (not useEmaCrossRules or crossesBelow(open, close, fastMA))
+bullishEngulfWithEma = enableEngulfing and isBullEngulf and (not useEmaCrossRules or crossesAbove(open, close, fastMA))
+bearishEngulfWithEma = enableEngulfing and isBearEngulf and (not useEmaCrossRules or crossesBelow(open, close, fastMA))
 
-// Check if all EMAs cross (only used when both useEmaCrossRules and enableAllEmaCross are true)
-allEmasCrossBull = useEmaCrossRules and enableAllEmaCross and crossesAbove(open, close, ema9) and crossesAbove(open, close, ema40) and crossesAbove(open, close, ema80)
-allEmasCrossBear = useEmaCrossRules and enableAllEmaCross and crossesBelow(open, close, ema9) and crossesBelow(open, close, ema40) and crossesBelow(open, close, ema80)
+// Check if all MAs cross (only used when both useEmaCrossRules and enableAllEmaCross are true)
+allMAsCrossBull = useEmaCrossRules and enableAllEmaCross and crossesAbove(open, close, fastMA) and crossesAbove(open, close, mediumMA) and crossesAbove(open, close, slowMA)
+allMAsCrossBear = useEmaCrossRules and enableAllEmaCross and crossesBelow(open, close, fastMA) and crossesBelow(open, close, mediumMA) and crossesBelow(open, close, slowMA)
 
 // Final entry conditions
-longCondition = enableLong and trendOkBull and stochOkBull and volumeOk and (not useMacdConfirmation or macdBullish) and useEmaCrossRules and ((enable123 and bull123 and (crossesAbove(open, close, ema9) or (enableAllEmaCross and allEmasCrossBull))) or (enablePFR and bullishPFR and (crossesAbove(open, close, ema9) or (enableAllEmaCross and allEmasCrossBull))) or (enableEngulfing and isBullEngulf and (crossesAbove(open, close, ema9) or (enableAllEmaCross and allEmasCrossBull))))
+longCondition = enableLong and trendOkBull and stochOkBull and volumeOk and (not useMacdConfirmation or macdBullish) and useEmaCrossRules and ((enable123 and bull123 and (crossesAbove(open, close, fastMA) or (enableAllEmaCross and allMAsCrossBull))) or (enablePFR and bullishPFR and (crossesAbove(open, close, fastMA) or (enableAllEmaCross and allMAsCrossBull))) or (enableEngulfing and isBullEngulf and (crossesAbove(open, close, fastMA) or (enableAllEmaCross and allMAsCrossBull))))
 
-shortCondition = enableShort and trendOkBear and stochOkBear and volumeOk and (not useMacdConfirmation or macdBearish) and useEmaCrossRules and ((enable123 and bear123 and (crossesBelow(open, close, ema9) or (enableAllEmaCross and allEmasCrossBear))) or (enablePFR and bearishPFR and (crossesBelow(open, close, ema9) or (enableAllEmaCross and allEmasCrossBear))) or (enableEngulfing and isBearEngulf and (crossesBelow(open, close, ema9) or (enableAllEmaCross and allEmasCrossBear))))
+shortCondition = enableShort and trendOkBear and stochOkBear and volumeOk and (not useMacdConfirmation or macdBearish) and useEmaCrossRules and ((enable123 and bear123 and (crossesBelow(open, close, fastMA) or (enableAllEmaCross and allMAsCrossBear))) or (enablePFR and bearishPFR and (crossesBelow(open, close, fastMA) or (enableAllEmaCross and allMAsCrossBear))) or (enableEngulfing and isBearEngulf and (crossesBelow(open, close, fastMA) or (enableAllEmaCross and allMAsCrossBear))))
 
 // === Pattern Label Construction ===
 getPatternText() =>
@@ -414,38 +416,38 @@ buildReasons(isLong) =>
     if useEmaCrossRules
         if bull123 or bear123
             r := r + "\n123 Pattern EMA Cross Details:\n"
-            candle0CrossesEma9 = isLong ? crossesAbove(open, close, ema9) : crossesBelow(open, close, ema9)
-            noEma40Cross0 = not crossesEma(open, close, ema40)
-            noEma80Cross0 = not crossesEma(open, close, ema80)
+            candle0CrossesFastMA = isLong ? crossesAbove(open, close, fastMA) : crossesBelow(open, close, fastMA)
+            noMediumMACross0 = not crossesEma(open, close, mediumMA)
+            noSlowMACross0 = not crossesEma(open, close, slowMA)
             r := r + "  Current Candle:\n"
             r := r + "    Open: " + str.tostring(open) + " Close: " + str.tostring(close) + "\n"
-            r := r + "    EMA9: " + str.tostring(ema9) + " Cross: " + (candle0CrossesEma9 ? "✅" : "❌") + "\n"
-            r := r + "    EMA40: " + str.tostring(ema40) + " No Cross: " + (noEma40Cross0 ? "✅" : "❌") + "\n"
-            r := r + "    EMA80: " + str.tostring(ema80) + " No Cross: " + (noEma80Cross0 ? "✅" : "❌") + "\n"
+            r := r + "    Fast MA: " + str.tostring(fastMA) + " Cross: " + (candle0CrossesFastMA ? "✅" : "❌") + "\n"
+            r := r + "    Medium MA: " + str.tostring(mediumMA) + " No Cross: " + (noMediumMACross0 ? "✅" : "❌") + "\n"
+            r := r + "    Slow MA: " + str.tostring(slowMA) + " No Cross: " + (noSlowMACross0 ? "✅" : "❌") + "\n"
             r := r + (check123EmaCross(isLong) ? "✅ 123 EMA Cross\n" : "❌ 123 EMA Cross\n")
         
         if bullishPFR or bearishPFR
             r := r + "\nPFR Pattern EMA Cross Details:\n"
-            candle0CrossesEma9 = isLong ? crossesAbove(open, close, ema9) : crossesBelow(open, close, ema9)
-            noEma40Cross0 = not crossesEma(open, close, ema40)
-            noEma80Cross0 = not crossesEma(open, close, ema80)
+            candle0CrossesFastMA = isLong ? crossesAbove(open, close, fastMA) : crossesBelow(open, close, fastMA)
+            noMediumMACross0 = not crossesEma(open, close, mediumMA)
+            noSlowMACross0 = not crossesEma(open, close, slowMA)
             r := r + "  Current Candle:\n"
             r := r + "    Open: " + str.tostring(open) + " Close: " + str.tostring(close) + "\n"
-            r := r + "    EMA9: " + str.tostring(ema9) + " Cross: " + (candle0CrossesEma9 ? "✅" : "❌") + "\n"
-            r := r + "    EMA40: " + str.tostring(ema40) + " No Cross: " + (noEma40Cross0 ? "✅" : "❌") + "\n"
-            r := r + "    EMA80: " + str.tostring(ema80) + " No Cross: " + (noEma80Cross0 ? "✅" : "❌") + "\n"
+            r := r + "    Fast MA: " + str.tostring(fastMA) + " Cross: " + (candle0CrossesFastMA ? "✅" : "❌") + "\n"
+            r := r + "    Medium MA: " + str.tostring(mediumMA) + " No Cross: " + (noMediumMACross0 ? "✅" : "❌") + "\n"
+            r := r + "    Slow MA: " + str.tostring(slowMA) + " No Cross: " + (noSlowMACross0 ? "✅" : "❌") + "\n"
             r := r + (checkPFREmaCross(isLong) ? "✅ PFR EMA Cross\n" : "❌ PFR EMA Cross\n")
         
         if isBullEngulf or isBearEngulf
             r := r + "\nEngulfing Pattern EMA Cross Details:\n"
-            candle0CrossesEma9 = isLong ? crossesAbove(open, close, ema9) : crossesBelow(open, close, ema9)
-            noEma40Cross = not crossesEma(open, close, ema40)
-            noEma80Cross = not crossesEma(open, close, ema80)
+            candle0CrossesFastMA = isLong ? crossesAbove(open, close, fastMA) : crossesBelow(open, close, fastMA)
+            noMediumMACross = not crossesEma(open, close, mediumMA)
+            noSlowMACross = not crossesEma(open, close, slowMA)
             r := r + "  Current Candle:\n"
             r := r + "    Open: " + str.tostring(open) + " Close: " + str.tostring(close) + "\n"
-            r := r + "    EMA9: " + str.tostring(ema9) + " Cross: " + (candle0CrossesEma9 ? "✅" : "❌") + "\n"
-            r := r + "    EMA40: " + str.tostring(ema40) + " No Cross: " + (noEma40Cross ? "✅" : "❌") + "\n"
-            r := r + "    EMA80: " + str.tostring(ema80) + " No Cross: " + (noEma80Cross ? "✅" : "❌") + "\n"
+            r := r + "    Fast MA: " + str.tostring(fastMA) + " Cross: " + (candle0CrossesFastMA ? "✅" : "❌") + "\n"
+            r := r + "    Medium MA: " + str.tostring(mediumMA) + " No Cross: " + (noMediumMACross ? "✅" : "❌") + "\n"
+            r := r + "    Slow MA: " + str.tostring(slowMA) + " No Cross: " + (noSlowMACross ? "✅" : "❌") + "\n"
             r := r + (checkEngulfingEmaCross(isLong) ? "✅ Engulfing EMA Cross\n" : "❌ Engulfing EMA Cross\n")
     
     // Add entry condition status
@@ -639,12 +641,12 @@ buildPFRDebugDetails() =>
             direction := "Bullish"
             
             // Add EMA cross debug information
-            candle0CrossesEma9 = crossesAbove(open, close, ema9)
-            noEma40Cross0 = not crossesEma(open, close, ema40)
-            noEma80Cross0 = not crossesEma(open, close, ema80)
-            candle0CrossesEma40 = crossesAbove(open, close, ema40)
-            candle0CrossesEma80 = crossesAbove(open, close, ema80)
-            allEmasCross = candle0CrossesEma9 and candle0CrossesEma40 and candle0CrossesEma80
+            candle0CrossesFastMA = crossesAbove(open, close, fastMA)
+            noMediumMACross0 = not crossesEma(open, close, mediumMA)
+            noSlowMACross0 = not crossesEma(open, close, slowMA)
+            candle0CrossesMediumMA = crossesAbove(open, close, mediumMA)
+            candle0CrossesSlowMA = crossesAbove(open, close, slowMA)
+            allMAsCross = candle0CrossesFastMA and candle0CrossesMediumMA and candle0CrossesSlowMA
             
             reasons := "✅ PFR Pattern Detected (Bullish)\n"
             reasons := reasons + "  Current candle: O=" + str.tostring(open) + " C=" + str.tostring(close) + " (Green) Body=" + str.tostring(reversalBody) + "\n"
@@ -658,10 +660,10 @@ buildPFRDebugDetails() =>
             reasons := reasons + "  - Current close (" + str.tostring(close) + ") is above previous close (" + str.tostring(close[1]) + ")\n"
             reasons := reasons + "  - Current body (" + str.tostring(reversalBody) + ") is larger than previous body (" + str.tostring(prevBody1) + ")\n"
             reasons := reasons + "\nEMA Cross Details:\n"
-            reasons := reasons + "  EMA9: " + str.tostring(ema9) + " Cross: " + (candle0CrossesEma9 ? "✅" : "❌") + "\n"
-            reasons := reasons + "  EMA40: " + str.tostring(ema40) + " No Cross: " + (noEma40Cross0 ? "✅" : "❌") + "\n"
-            reasons := reasons + "  EMA80: " + str.tostring(ema80) + " No Cross: " + (noEma80Cross0 ? "✅" : "❌") + "\n"
-            reasons := reasons + "  All EMAs Cross: " + (allEmasCross ? "✅" : "❌") + "\n"
+            reasons := reasons + "  Fast MA: " + str.tostring(fastMA) + " Cross: " + (candle0CrossesFastMA ? "✅" : "❌") + "\n"
+            reasons := reasons + "  Medium MA: " + str.tostring(mediumMA) + " No Cross: " + (noMediumMACross0 ? "✅" : "❌") + "\n"
+            reasons := reasons + "  Slow MA: " + str.tostring(slowMA) + " No Cross: " + (noSlowMACross0 ? "✅" : "❌") + "\n"
+            reasons := reasons + "  All MAs Cross: " + (allMAsCross ? "✅" : "❌") + "\n"
             reasons := reasons + "  Enable All EMA Cross: " + (enableAllEmaCross ? "✅" : "❌") + "\n"
             reasons := reasons + "  Final Entry Condition: " + (checkPFREmaCross(true) ? "✅" : "❌")
         else
@@ -686,12 +688,12 @@ buildPFRDebugDetails() =>
             direction := "Bearish"
             
             // Add EMA cross debug information
-            candle0CrossesEma9 = crossesBelow(open, close, ema9)
-            noEma40Cross0 = not crossesEma(open, close, ema40)
-            noEma80Cross0 = not crossesEma(open, close, ema80)
-            candle0CrossesEma40 = crossesBelow(open, close, ema40)
-            candle0CrossesEma80 = crossesBelow(open, close, ema80)
-            allEmasCross = candle0CrossesEma9 and candle0CrossesEma40 and candle0CrossesEma80
+            candle0CrossesFastMA = crossesBelow(open, close, fastMA)
+            noMediumMACross0 = not crossesEma(open, close, mediumMA)
+            noSlowMACross0 = not crossesEma(open, close, slowMA)
+            candle0CrossesMediumMA = crossesBelow(open, close, mediumMA)
+            candle0CrossesSlowMA = crossesBelow(open, close, slowMA)
+            allMAsCross = candle0CrossesFastMA and candle0CrossesMediumMA and candle0CrossesSlowMA
             
             reasons := "✅ PFR Pattern Detected (Bearish)\n"
             reasons := reasons + "  Current candle: O=" + str.tostring(open) + " C=" + str.tostring(close) + " (Red) Body=" + str.tostring(reversalBody) + "\n"
@@ -705,10 +707,10 @@ buildPFRDebugDetails() =>
             reasons := reasons + "  - Current close (" + str.tostring(close) + ") is below previous close (" + str.tostring(close[1]) + ")\n"
             reasons := reasons + "  - Current body (" + str.tostring(reversalBody) + ") is larger than previous body (" + str.tostring(prevBody1) + ")\n"
             reasons := reasons + "\nEMA Cross Details:\n"
-            reasons := reasons + "  EMA9: " + str.tostring(ema9) + " Cross: " + (candle0CrossesEma9 ? "✅" : "❌") + "\n"
-            reasons := reasons + "  EMA40: " + str.tostring(ema40) + " No Cross: " + (noEma40Cross0 ? "✅" : "❌") + "\n"
-            reasons := reasons + "  EMA80: " + str.tostring(ema80) + " No Cross: " + (noEma80Cross0 ? "✅" : "❌") + "\n"
-            reasons := reasons + "  All EMAs Cross: " + (allEmasCross ? "✅" : "❌") + "\n"
+            reasons := reasons + "  Fast MA: " + str.tostring(fastMA) + " Cross: " + (candle0CrossesFastMA ? "✅" : "❌") + "\n"
+            reasons := reasons + "  Medium MA: " + str.tostring(mediumMA) + " No Cross: " + (noMediumMACross0 ? "✅" : "❌") + "\n"
+            reasons := reasons + "  Slow MA: " + str.tostring(slowMA) + " No Cross: " + (noSlowMACross0 ? "✅" : "❌") + "\n"
+            reasons := reasons + "  All MAs Cross: " + (allMAsCross ? "✅" : "❌") + "\n"
             reasons := reasons + "  Enable All EMA Cross: " + (enableAllEmaCross ? "✅" : "❌") + "\n"
             reasons := reasons + "  Final Entry Condition: " + (checkPFREmaCross(false) ? "✅" : "❌")
         else
