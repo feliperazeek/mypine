@@ -1,0 +1,222 @@
+//@version=5
+strategy("NakInvest - Cross EMA with RSI Divergence", 
+         overlay=true, 
+         default_qty_type=strategy.percent_of_equity, 
+         default_qty_value=100, 
+         commission_type=strategy.commission.percent, 
+         commission_value=0.045)
+
+// === Input Groups ===
+var string GP_CANDLES = "Candle Size Configuration", GP_FILTERS = "Trading Filters", GP_STATS = "Statistics Settings", GP_RISK = "Risk Management", GP_DEBUG = "Debug Settings", GP_PRICE = "Price Comparison Settings", GP_PATTERNS = "Pattern Settings", GP_MACD = "MACD Settings", GP_PFR = "PFR Settings", GP_STOCH = "Stochastic Settings", GP_RSI = "RSI Divergence Settings"
+
+// === RSI Divergence Settings ===
+useRsiDivFilter = input.bool(false, "Use RSI Divergence Filter", group=GP_RSI)
+rsiLength = input.int(14, "RSI Length", minval=1, group=GP_RSI)
+rsiDivLookback = input.int(20, "RSI Divergence Lookback", minval=1, maxval=500, group=GP_RSI, tooltip="Number of bars to look back for divergences")
+bulldivcol = input.color(color.green, "Bullish Divergence Color", group=GP_RSI)
+beardivcol = input.color(color.red, "Bearish Divergence Color", group=GP_RSI)
+divwidth = input.int(1, "Divergence Line Width", minval=1, maxval=4, group=GP_RSI)
+
+// === Original Input Parameters (Grouped) ===
+minCandle1Size = input.float(0.1, "Min Candle 1 Size (absolute units)", minval=0.0001, group=GP_CANDLES)
+minCandle2Pct = input.float(0.1, "Min Candle 2 Body Size as % of Candle 1", minval=0.01, group=GP_CANDLES)
+maxCandle2Pct = input.float(0.5, "Max Candle 2 Body Size as % of Candle 1", minval=0.01, group=GP_CANDLES)
+minCandle3Pct = input.float(0.6, "Min Candle 3 Body Size as % of Candle 1", minval=0.01, group=GP_CANDLES)
+maxCandle3Pct = input.float(1.5, "Max Candle 3 Body Size as % of Candle 1", minval=0.01, group=GP_CANDLES)
+
+// === Filters and Setup ===
+enableLong = input.bool(true, "Enable Long Positions", group=GP_FILTERS)
+enableShort = input.bool(true, "Enable Short Positions", group=GP_FILTERS)
+useTrendFilter = input.bool(true, "Use Trend Filter", group=GP_FILTERS)
+useNoTradeZone = true
+useVolumeFilter = input.bool(false, "Use Volume Filter", group=GP_FILTERS)
+minVolume = input.float(1.5, "Minimum Volume Multiplier", minval=0.1, step=0.1, group=GP_FILTERS)
+
+// === Stochastic Configuration ===
+useStochFilter = input.bool(false, "Use Stochastic Filter", group=GP_STOCH)
+stochLength = input.int(21, "Stochastic Length", group=GP_STOCH)
+stochOverbought = input.float(50, "Stoch Overbought", group=GP_STOCH)
+stochOversold = input.float(50, "Stoch Oversold", group=GP_STOCH)
+
+// === Risk Management ===
+tpType = input.string("RR-Based", "Take Profit Type", options=["RR-Based", "Percentage From Entry"], group=GP_RISK)
+profitTargetRR = input.float(1.0, "Take Profit Ratio (vs SL)", group=GP_RISK)
+tpPercent = input.float(1.0, "Take Profit % From Entry", group=GP_RISK)
+slType = input.string("Below Candle Wick", "Stop Loss Type", options=["Below Candle Body", "Below Candle Wick", "Percentage", "Lowest Low"], group=GP_RISK)
+slPercent = input.float(1.0, "Stop Loss %", group=GP_RISK)
+slCandlesLookback = input.int(10, "Number of Candles for Lowest Low", minval=1, group=GP_RISK)
+
+// === Price Comparison Configuration ===
+priceBufferPct = input.float(0.001, "Price Comparison Buffer (%)", minval=0.0, maxval=100.0, group=GP_PRICE)
+
+// === Pattern Configuration ===
+enable123 = input.bool(true, "Enable 123 Pattern", group=GP_PATTERNS)
+enablePFR = input.bool(true, "Enable PFR Pattern", group=GP_PATTERNS)
+enableEngulfing = input.bool(true, "Enable Engulfing Pattern", group=GP_PATTERNS)
+
+// === MACD Configuration ===
+useMacdConfirmation = input.bool(false, "Use MACD Confirmation", group=GP_MACD)
+macdFastLength = input.int(12, "MACD Fast Length", group=GP_MACD)
+macdSlowLength = input.int(26, "MACD Slow Length", group=GP_MACD)
+macdSignalLength = input.int(9, "MACD Signal Length", group=GP_MACD)
+
+// === PFR Configuration ===
+pfrUseWicks = false
+
+// === Helper Functions ===
+calcWinRate(wins, total) => total == 0 ? 0.0 : (wins / total) * 100
+formatDuration(mins) => math.floor(mins / 60) > 0 ? str.tostring(math.floor(mins / 60)) + "h " + str.tostring(mins % 60) + "m" : str.tostring(mins % 60) + "m"
+crossesAbove(candleOpen, candleClose, emaValue) => candleOpen < emaValue and candleClose > emaValue
+crossesBelow(candleOpen, candleClose, emaValue) => candleOpen > emaValue and candleClose < emaValue
+crossesEma(candleOpen, candleClose, emaValue) => crossesAbove(candleOpen, candleClose, emaValue) or crossesBelow(candleOpen, candleClose, emaValue)
+roundValue(value) => math.round(value * 1000) / 1000  // Round to 3 decimal places
+
+// === RSI Divergence Calculations ===
+// RSI
+rsi = ta.rsi(close, rsiLength)
+
+// Pivot points for price and RSI
+LB = 1
+RB = 1
+
+// Price pivots
+ph = ta.pivothigh(high, LB, RB)
+pl = ta.pivotlow(low, LB, RB)
+
+// RSI pivots
+rh = ta.pivothigh(rsi, LB, RB)
+rl = ta.pivotlow(rsi, LB, RB)
+
+// Get values at pivots
+hh0 = ta.valuewhen(ph, high[1], 0)
+ll0 = ta.valuewhen(pl, low[1], 0)
+rsih0 = hh0 ? ta.valuewhen(ph, rsi[1], 0) : na
+rsil0 = ll0 ? ta.valuewhen(pl, rsi[1], 0) : na
+
+hh1 = hh0 ? ta.valuewhen(ph, high[1], 1) : na
+ll1 = ll0 ? ta.valuewhen(pl, low[1], 1) : na
+rsih1 = hh0 ? ta.valuewhen(ph, rsi[1], 1) : na
+rsil1 = ll0 ? ta.valuewhen(pl, rsi[1], 1) : na
+
+hh2 = hh0 ? ta.valuewhen(ph, high[1], 2) : na
+ll2 = ll0 ? ta.valuewhen(pl, low[1], 2) : na
+rsih2 = hh0 ? ta.valuewhen(ph, rsi[1], 2) : na
+rsil2 = ll0 ? ta.valuewhen(pl, rsi[1], 2) : na
+
+// Bullish divergence conditions
+bullDiv1 = ll0 < ll1 and rsil0 > rsil1
+bullDiv2 = ll0 < ll2 and ll1 > ll0 and ll1 > (ll2 - ((ll2 - ll0) * 0.5)) and rsil0 > rsil2 and rsil1 > rsil2 and rsil1 > (rsil2 + ((rsil0 - rsil2) / 2))
+
+// Bearish divergence conditions
+bearDiv1 = hh0 > hh1 and rsih0 < rsih1
+bearDiv2 = hh0 > hh2 and hh1 < hh0 and hh1 < (hh2 + ((hh0 - hh2) * 0.5)) and rsih0 < rsih2 and rsih1 < rsih2 and rsih1 < (rsih2 - ((rsih2 - rsih0) / 2))
+
+// Combined divergence signals
+bullDiv = bullDiv1 or bullDiv2
+bearDiv = bearDiv1 or bearDiv2
+
+// Check for recent divergences
+recentBullDiv = false
+recentBearDiv = false
+
+for i = 0 to rsiDivLookback
+    if bullDiv[i]
+        recentBullDiv := true
+    if bearDiv[i]
+        recentBearDiv := true
+
+// === Plot Divergences ===
+// Plot divergence lines
+if bullDiv
+    line.new(bar_index[1], ll0, bar_index[1], ll1, xloc=xloc.bar_index, extend=extend.none, color=bulldivcol, width=divwidth)
+    line.new(bar_index[1], rsil0, bar_index[1], rsil1, xloc=xloc.bar_index, extend=extend.none, color=bulldivcol, width=divwidth)
+
+if bearDiv
+    line.new(bar_index[1], hh0, bar_index[1], hh1, xloc=xloc.bar_index, extend=extend.none, color=beardivcol, width=divwidth)
+    line.new(bar_index[1], rsih0, bar_index[1], rsih1, xloc=xloc.bar_index, extend=extend.none, color=beardivcol, width=divwidth)
+
+// Plot divergence shapes
+plotshape(bullDiv ? true : false, title="Bullish Divergence", style=shape.circle, location=location.belowbar, size=size.small, color=color.green, offset=-1)
+plotshape(bearDiv ? true : false, title="Bearish Divergence", style=shape.circle, location=location.abovebar, size=size.small, color=color.red, offset=-1)
+
+// === EMA/SMA Configuration ===
+maGroup = "Moving Average Settings"
+maType = input.string("EMA", "MA Type", options=["EMA", "SMA"], group=maGroup)
+fastLength = input.int(9, "Fast MA Length", minval=1, group=maGroup)
+mediumLength = input.int(40, "Medium MA Length", minval=1, group=maGroup)
+slowLength = input.int(80, "Slow MA Length", minval=1, group=maGroup)
+
+// === Technical Indicators ===
+fastMA = maType == "EMA" ? ta.ema(close, fastLength) : ta.sma(close, fastLength)
+mediumMA = maType == "EMA" ? ta.ema(close, mediumLength) : ta.sma(close, mediumLength)
+slowMA = maType == "EMA" ? ta.ema(close, slowLength) : ta.sma(close, slowLength)
+
+plot(fastMA, color=color.blue, title="Fast MA")
+plot(mediumMA, color=color.green, title="Medium MA")
+plot(slowMA, color=color.red, title="Slow MA")
+
+// Stochastic
+k = ta.stoch(close, high, low, stochLength)
+
+// MACD
+[macdLine, signalLine, histLine] = ta.macd(close, macdFastLength, macdSlowLength, macdSignalLength)
+macdBullish = histLine > 0
+macdBearish = histLine < 0
+
+// Volume filter
+volumeThreshold = ta.sma(volume, 20) * minVolume
+volumeOk = not useVolumeFilter or volume > volumeThreshold
+
+// === Trend & Filters ===
+isInNoTradeZone = useNoTradeZone and close > math.min(mediumMA, slowMA) and close < math.max(mediumMA, slowMA)
+isInTradeZone = not isInNoTradeZone
+trendOkBull = not useTrendFilter or (fastMA > mediumMA and mediumMA > slowMA)
+trendOkBear = not useTrendFilter or (slowMA > mediumMA and mediumMA > fastMA)
+stochOkBull = not useStochFilter or k < stochOversold
+stochOkBear = not useStochFilter or k > stochOverbought
+
+// === Entry Conditions ===
+// Original entry conditions
+longCondition = enableLong and trendOkBull and stochOkBull and volumeOk and (not useMacdConfirmation or macdBullish) and crossesAbove(open, close, fastMA)
+shortCondition = enableShort and trendOkBear and stochOkBear and volumeOk and (not useMacdConfirmation or macdBearish) and crossesBelow(open, close, fastMA)
+
+// Add RSI divergence filter if enabled
+longCondition := longCondition and (not useRsiDivFilter or recentBullDiv)
+shortCondition := shortCondition and (not useRsiDivFilter or recentBearDiv)
+
+// === Risk Management Calculations ===
+bullSL = slType == "Percentage" ? high * (1 - slPercent / 100) : 
+         slType == "Below Candle Wick" ? math.min(low, low[1], low[2]) - syminfo.mintick : 
+         slType == "Lowest Low" ? ta.lowest(low, slCandlesLookback) - syminfo.mintick :
+         math.min(open, open[1], open[2]) - syminfo.mintick
+
+bearSL = slType == "Percentage" ? low * (1 + slPercent / 100) : 
+         slType == "Below Candle Wick" ? math.max(high, high[1], high[2]) + syminfo.mintick : 
+         slType == "Lowest Low" ? ta.highest(high, slCandlesLookback) + syminfo.mintick :
+         math.max(close, close[1], close[2]) + syminfo.mintick
+
+longEntry = high + syminfo.mintick
+shortEntry = low - syminfo.mintick
+longTP = tpType == "Percentage From Entry" ? longEntry * (1 + tpPercent / 100) : longEntry + (longEntry - bullSL) * profitTargetRR
+shortTP = tpType == "Percentage From Entry" ? shortEntry * (1 - tpPercent / 100) : shortEntry - (bearSL - shortEntry) * profitTargetRR
+
+// === Trade Execution ===
+if longCondition
+    strategy.entry("Long", strategy.long, limit=longEntry)
+    strategy.exit("TP/SL Long", from_entry="Long", stop=bullSL, limit=longTP)
+
+if shortCondition
+    strategy.entry("Short", strategy.short, limit=shortEntry)
+    strategy.exit("TP/SL Short", from_entry="Short", stop=bearSL, limit=shortTP)
+
+// === Alert Conditions ===
+alertcondition(longCondition, title="Long Entry Signal", message="LONG {{ticker}} | Entry: {{close}} | TP: {{str.tostring(longTP)}} | SL: {{str.tostring(bullSL)}} | Last Candle: O={{open}} C={{close}}")
+alertcondition(shortCondition, title="Short Entry Signal", message="SHORT {{ticker}} | Entry: {{close}} | TP: {{str.tostring(shortTP)}} | SL: {{str.tostring(bearSL)}} | Last Candle: O={{open}} C={{close}}")
+
+// RSI Divergence Alerts
+alertcondition(bullDiv, title="Bullish Divergence", message="Bullish Divergence detected on {{ticker}}")
+alertcondition(bearDiv, title="Bearish Divergence", message="Bearish Divergence detected on {{ticker}}")
+
+// Combined Alerts
+alertcondition(longCondition and useRsiDivFilter and recentBullDiv, title="Long Entry + Bullish Divergence", message="LONG {{ticker}} with Bullish Divergence | Entry: {{close}} | TP: {{str.tostring(longTP)}} | SL: {{str.tostring(bullSL)}}")
+alertcondition(shortCondition and useRsiDivFilter and recentBearDiv, title="Short Entry + Bearish Divergence", message="SHORT {{ticker}} with Bearish Divergence | Entry: {{close}} | TP: {{str.tostring(shortTP)}} | SL: {{str.tostring(bearSL)}}") 
