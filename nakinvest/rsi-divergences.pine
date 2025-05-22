@@ -1,0 +1,160 @@
+//@version=5
+strategy("RSI Divergence Strategy", overlay=true, scale = scale.none, commission_type=strategy.commission.percent, commission_value=0.045)
+
+// === RSI Settings ===
+rsilen = input.int(14, title="RSI Length")
+rsisrc = input(close, title="RSI Source")
+x = ta.rsi(rsisrc, rsilen)
+len = input.int(14, title="RSI Divergence Length", maxval=500)
+
+// === Moving Average Settings ===
+maType = input.string("EMA", title="Moving Average Type", options=["EMA", "SMA"])
+fastLength = input.int(20, title="Fast MA Length", minval=1)
+slowLength = input.int(200, title="Slow MA Length", minval=1)
+useTrendFilter = input.bool(true, title="Use Trend Filter", tooltip="Only take trades in the direction of the trend")
+
+// === Stop Loss Settings ===
+slType = input.string("Below Candle", title="Stop Loss Type", options=["Below Candle", "Lowest/Highest", "Percentage"])
+slCandles = input.int(10, title="Number of Candles for Lowest/Highest", minval=1, tooltip="Only used when Stop Loss Type is 'Lowest/Highest'")
+slPercent = input.float(1.0, title="Stop Loss Percentage", minval=0.001, maxval=100.0, step=0.001, tooltip="Only used when Stop Loss Type is 'Percentage'")
+
+// === Take Profit Settings ===
+tpType = input.string("Percentage", title="Take Profit Type", options=["Ratio", "Percentage"])
+tpRatio = input.float(1.0, title="Take Profit Ratio (vs SL)", minval=0.1, step=0.1, tooltip="Only used when Take Profit Type is 'Ratio'")
+tpPercent = input.float(1.0, title="Take Profit Percentage", minval=0.001, maxval=100.0, step=0.001, tooltip="Only used when Take Profit Type is 'Percentage'")
+
+// === Moving Averages ===
+fastMA = maType == "EMA" ? ta.ema(close, fastLength) : ta.sma(close, fastLength)
+slowMA = maType == "EMA" ? ta.ema(close, slowLength) : ta.sma(close, slowLength)
+
+// === Trend Filter Conditions ===
+isBullishTrend = close > fastMA and fastMA > slowMA
+isBearishTrend = close < fastMA and fastMA < slowMA
+
+// === Moving Average Plots ===
+plot(fastMA, color=color.green, title="Fast MA", linewidth=2)
+plot(slowMA, color=color.red, title="Slow MA", linewidth=2)
+
+// === RSI Divergence Calculations ===
+src = close
+extrapolation = 0
+zoom = input.int(0, title="zoom", maxval=27, minval=-27)
+hline(300-zoom*10, color=color.rgb(54, 58, 69, 100))
+hline(10, color=color.rgb(54, 58, 69, 100))
+
+// for ax+b
+xo = 0.0
+yo = 0.0
+xyo = 0.0
+xxo = 0.0
+for i=0 to len-1
+    xo := xo + i/(len)
+    yo := yo + x[len-1-i]/(len)
+    xyo := xyo + i*x[len-1-i]/(len)
+    xxo := xxo + i*i/(len)
+
+dnm = ta.lowest(low,200)
+dizi = array.new_float(len*2+1+extrapolation)
+linedizi = array.new_line()
+a = (xo*yo-xyo)/(xo*xo-xxo)
+b = yo-a*xo
+for i=0 to len-1+extrapolation
+    array.set(dizi,i,a*i+b)
+
+// for src
+// for ax+b
+xo2 = 0.0
+yo2 = 0.0
+xyo2 = 0.0
+xxo2 = 0.0
+for i=0 to len-1
+    xo2 := xo2 + i/(len)
+    yo2 := yo2 + src[len-1-i]/(len)
+    xyo2 := xyo2 + i*src[len-1-i]/(len)
+    xxo2 := xxo2 + i*i/(len)
+
+dizi2 = array.new_float(len*2+1+extrapolation)
+linedizi2 = array.new_line()
+a2 = (xo2*yo2-xyo2)/(xo2*xo2-xxo2)
+b2 = yo2-a*xo2
+for i=0 to len-1+extrapolation
+    array.set(dizi2,i,a2*i+b2)
+
+ttk = ((array.get(dizi,0)<array.get(dizi,1)) and (array.get(dizi2,0)>array.get(dizi2,1))) ? 1 : ((array.get(dizi,0)>array.get(dizi,1)) and (array.get(dizi2,0)<array.get(dizi2,1))) ? -1 : 0
+
+cg = ((array.get(dizi,0)<array.get(dizi,1)) and (array.get(dizi2,0)>array.get(dizi2,1)))
+cr = ((array.get(dizi,0)>array.get(dizi,1)) and (array.get(dizi2,0)<array.get(dizi2,1)))
+
+bgcolor(color=(cg and ta.highest(ttk[1],len/2)<1) ? color.rgb(76, 175, 79, 50) : (cr and ta.lowest(ttk[1],len/2)>-1) ? color.rgb(255, 82, 82, 50) : na, offset=0, display=display.none)
+
+// for ax+b
+xo3 = 0.0
+yo3 = 0.0
+xyo3 = 0.0
+xxo3 = 0.0
+for i=0 to len-1
+    xo3 := xo3 + i/(len)
+    yo3 := yo3 + x[len-1-i+(ta.barssince(cg))]/(len)
+    xyo3 := xyo3 + i*x[len-1-i+(ta.barssince(cg))]/(len)
+    xxo3 := xxo3 + i*i/(len)
+
+dizi3 = array.new_float(len*2+1+extrapolation)
+linedizi3 = array.new_line()
+a3 = (xo3*yo3-xyo3)/(xo3*xo3-xxo3)
+b3 = yo3-a3*xo3
+for i=0 to len-1+extrapolation
+    array.set(dizi3,i,a3*i+b3)
+
+// for ax+b
+xo4 = 0.0
+yo4 = 0.0
+xyo4 = 0.0
+xxo4 = 0.0
+for i=0 to len-1
+    xo4 := xo4 + i/(len)
+    yo4 := yo4 + x[len-1-i+(ta.barssince(cr))]/(len)
+    xyo4 := xyo4 + i*x[len-1-i+(ta.barssince(cr))]/(len)
+    xxo4 := xxo4 + i*i/(len)
+
+dizi4 = array.new_float(len*2+1+extrapolation)
+linedizi4 = array.new_line()
+a4 = (xo4*yo4-xyo4)/(xo4*xo4-xxo4)
+b4 = yo4-a4*xo4
+for i=0 to len-1+extrapolation
+    array.set(dizi4,i,a4*i+b4)
+
+line = line.new((last_bar_index-ta.barssince(cg)-len), array.get(dizi3,0), last_bar_index-ta.barssince(cg), array.get(dizi3,len-1), color=color.rgb(0,255,0), width=2)
+line2 = line.new((last_bar_index-ta.barssince(cr)-len), array.get(dizi4,0), last_bar_index-ta.barssince(cr), array.get(dizi4,len-1), color=color.rgb(255, 0, 0, 0), width=2)
+line.delete(line[1])
+line.delete(line2[1])
+
+alert = ((array.get(dizi,0)<array.get(dizi,1)) and (array.get(dizi2,0)>array.get(dizi2,1)) and ta.highest(ttk[1],len/2)<1) or ((array.get(dizi,0)>array.get(dizi,1)) and (array.get(dizi2,0)<array.get(dizi2,1)) and ta.lowest(ttk[1],len/2)>-1)
+alertcondition(alert)
+
+// === RSI Plot ===
+plot(x, color=color.blue, title="RSI")
+hline(50, color=color.gray)
+rs = hline(30, color=color.red)
+rss = hline(70, color=color.red)
+fill(rs, rss, color=color.rgb(126, 87, 194, 90), title="RSI Background Fill")
+
+// === Entry Conditions with Trend Filter ===
+longCondition = cg and ta.highest(ttk[1],len/2)<1 and (not useTrendFilter or isBullishTrend)
+shortCondition = cr and ta.lowest(ttk[1],len/2)>-1 and (not useTrendFilter or isBearishTrend)
+
+// === Stop Loss Calculations ===
+longSL = slType == "Below Candle" ? low - syminfo.mintick : slType == "Lowest/Highest" ? ta.lowest(low, slCandles) - syminfo.mintick : close * (1 - slPercent/100)
+shortSL = slType == "Below Candle" ? high + syminfo.mintick : slType == "Lowest/Highest" ? ta.highest(high, slCandles) + syminfo.mintick : close * (1 + slPercent/100)
+
+// === Take Profit Calculations ===
+longTP = tpType == "Ratio" ? close + (close - longSL) * tpRatio : close * (1 + tpPercent/100)
+shortTP = tpType == "Ratio" ? close - (shortSL - close) * tpRatio : close * (1 - tpPercent/100)
+
+// === Strategy Execution ===
+if (longCondition)
+    strategy.entry("Long", strategy.long, qty = math.round(x))
+    strategy.exit("exit long", "Long", limit = longTP, stop = longSL)
+
+if (shortCondition)
+    strategy.entry("Short", strategy.short, qty = math.round(100-x))
+    strategy.exit("exit short", "Short", limit = shortTP, stop = shortSL)
