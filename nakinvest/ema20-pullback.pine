@@ -102,6 +102,11 @@ tpType = input.string("RR-Based", "Take Profit Type", options=["RR-Based", "Perc
 tpPercent = input.float(1.0, "Take Profit %", minval=0.1, step=0.1, group="Risk Management")
 rrRatio = input.float(2.0, "Risk/Reward Ratio", minval=0.5, step=0.1, group="Risk Management")
 
+// Session Time Filter
+useSessionFilter = input.bool(true, "Use Session Time Filter", group="Session Settings")
+sessionTime = input.session("1000-1700", "Trading Session (São Paulo Time)", group="Session Settings", tooltip="Default: 10:00-17:00 São Paulo time")
+sessionTimeZone = input.string("America/Sao_Paulo", "Session Timezone", options=["America/Sao_Paulo", "America/New_York", "Europe/London", "Asia/Tokyo"], group="Session Settings")
+
 // Filters
 useVolumeFilter = input.bool(true, "Use Volume Filter", group="Filters")
 minVolume = input.float(1.5, "Minimum Volume Multiplier", minval=0.1, step=0.1, group="Filters")
@@ -112,13 +117,107 @@ stochLength = input.int(21, "Stochastic Length", minval=1, group="Filters")
 stochOverbought = input.int(80, "Stochastic Overbought", minval=1, maxval=100, group="Filters")
 stochOversold = input.int(20, "Stochastic Oversold", minval=1, maxval=100, group="Filters")
 
+// RSI Divergence Settings
+useRsiDivergence = input.bool(false, "Use RSI Divergence Filter", group="RSI Divergence")
+rsiLength = input.int(14, "RSI Length", minval=1, group="RSI Divergence")
+divergenceLookback = input.int(20, "Divergence Lookback Bars", minval=5, maxval=50, group="RSI Divergence", tooltip="Number of bars to look back for divergence patterns")
+rsiOverbought = input.float(70, "RSI Overbought Level", minval=50, maxval=100, group="RSI Divergence")
+rsiOversold = input.float(30, "RSI Oversold Level", minval=0, maxval=50, group="RSI Divergence")
+minDivergenceStrength = input.float(2, "Min Divergence Strength %", minval=0.1, step=0.1, group="RSI Divergence", tooltip="Minimum percentage difference between RSI points to consider valid divergence")
+
 // === Technical Indicators ===
 ema20 = ta.ema(close, emaLength)
 ema200 = ta.ema(close, ema200Length)
 atr = ta.atr(14)  // 14-period ATR
 
+// RSI Calculation
+rsi = ta.rsi(close, rsiLength)
+
 // Calculate EMA distance
 emaDistance = math.abs(ema20 - ema200) / ema200 * 100
+
+// === Divergence Detection Functions ===
+// Find pivot lows (for bullish divergence)
+pivotLow(src, leftBars, rightBars) =>
+    pivotLowFound = true
+    for i = 1 to leftBars
+        if src[i] < src[0]
+            pivotLowFound := false
+            break
+    for i = 1 to rightBars
+        if src[rightBars - i + 1] < src[0]
+            pivotLowFound := false
+            break
+    pivotLowFound ? src[0] : na
+
+// Find pivot highs (for bearish divergence)
+pivotHigh(src, leftBars, rightBars) =>
+    pivotHighFound = true
+    for i = 1 to leftBars
+        if src[i] > src[0]
+            pivotHighFound := false
+            break
+    for i = 1 to rightBars
+        if src[rightBars - i + 1] > src[0]
+            pivotHighFound := false
+            break
+    pivotHighFound ? src[0] : na
+
+// Detect bullish divergence (price makes lower low, RSI makes higher low)
+detectBullishDivergence() =>
+    bullishDiv = false
+    if useRsiDivergence
+        // Look for recent pivot lows
+        for i = 5 to divergenceLookback
+            priceLow1 = low[i]
+            rsiLow1 = rsi[i]
+            
+            // Check if we had a pivot low at position i
+            isPivot1 = true
+            for j = 1 to 3
+                if low[i+j] < priceLow1 or low[i-j] < priceLow1
+                    isPivot1 := false
+                    break
+            
+            if isPivot1 and priceLow1 < low and rsiLow1 < rsi and rsi < rsiOversold + 10
+                // Price made lower low, RSI made higher low
+                priceDiff = (low - priceLow1) / priceLow1 * 100
+                rsiDiff = (rsi - rsiLow1) / rsiLow1 * 100
+                
+                if math.abs(priceDiff) > 0.5 and rsiDiff > minDivergenceStrength
+                    bullishDiv := true
+                    break
+    bullishDiv
+
+// Detect bearish divergence (price makes higher high, RSI makes lower high)
+detectBearishDivergence() =>
+    bearishDiv = false
+    if useRsiDivergence
+        // Look for recent pivot highs
+        for i = 5 to divergenceLookback
+            priceHigh1 = high[i]
+            rsiHigh1 = rsi[i]
+            
+            // Check if we had a pivot high at position i
+            isPivot1 = true
+            for j = 1 to 3
+                if high[i+j] > priceHigh1 or high[i-j] > priceHigh1
+                    isPivot1 := false
+                    break
+            
+            if isPivot1 and priceHigh1 < high and rsiHigh1 > rsi and rsi > rsiOverbought - 10
+                // Price made higher high, RSI made lower high
+                priceDiff = (high - priceHigh1) / priceHigh1 * 100
+                rsiDiff = (rsi - rsiHigh1) / rsiHigh1 * 100
+                
+                if priceDiff > 0.5 and rsiDiff < -minDivergenceStrength
+                    bearishDiv := true
+                    break
+    bearishDiv
+
+// Calculate divergences
+bullishDivergence = detectBullishDivergence()
+bearishDivergence = detectBearishDivergence()
 
 // === Helper Functions ===
 // Calculate candle size and type
@@ -144,6 +243,9 @@ pullbackDistance = (high - ema20) / ema20 * 100
 stochK = ta.stoch(close, high, low, stochLength)
 stochD = ta.sma(stochK, 3)  // Using default D smoothing of 3
 stochOk = not useStochFilter or (isBullishCandle and stochK < stochOversold) or (isBearishCandle and stochK > stochOverbought)
+
+// Session filter
+inSession = not useSessionFilter or time(timeframe.period, sessionTime, sessionTimeZone)
 
 // Volume filter
 volumeThreshold = ta.sma(volume, 20) * minVolume
@@ -189,8 +291,12 @@ bearishPullback = enableShort and
                   stochOk
 
 // === Entry Conditions ===
-longCondition = bullishPullback and (not useTrendFilter or isBullishTrend) and volumeOk and macdOk
-shortCondition = bearishPullback and (not useTrendFilter or isBearishTrend) and volumeOk and macdOk
+// RSI Divergence filter - only apply if enabled
+rsiDivergenceOkLong = not useRsiDivergence or bullishDivergence
+rsiDivergenceOkShort = not useRsiDivergence or bearishDivergence
+
+longCondition = bullishPullback and (not useTrendFilter or isBullishTrend) and volumeOk and macdOk and inSession and rsiDivergenceOkLong
+shortCondition = bearishPullback and (not useTrendFilter or isBearishTrend) and volumeOk and macdOk and inSession and rsiDivergenceOkShort
 
 // === Risk Management Calculations ===
 // Stop Loss
@@ -232,6 +338,12 @@ if (showDebug and candleCrossesEma and not longCondition and not shortCondition)
     debugMessage := debugMessage + "📊 Volume: " + str.tostring(volume) + " (Threshold: " + str.tostring(volumeThreshold) + ")\n"
     debugMessage := debugMessage + "📏 Pullback: " + str.tostring(pullbackDistance) + "%\n"
     debugMessage := debugMessage + "📐 EMA Distance: " + str.tostring(emaDistance) + "%\n"
+    if useSessionFilter
+        debugMessage := debugMessage + "⏰ In Session: " + (inSession ? "✅ Yes" : "❌ No") + "\n"
+    if useRsiDivergence
+        debugMessage := debugMessage + "📊 RSI: " + str.tostring(rsi) + "\n"
+        debugMessage := debugMessage + "🔄 Bullish Div: " + (bullishDivergence ? "✅ Yes" : "❌ No") + "\n"
+        debugMessage := debugMessage + "🔄 Bearish Div: " + (bearishDivergence ? "✅ Yes" : "❌ No") + "\n"
     if useStochFilter
         debugMessage := debugMessage + "📉 Stochastic K: " + str.tostring(stochK) + "\n"
     if useMacdFilter
@@ -257,6 +369,10 @@ if (showDebug and candleCrossesEma and not longCondition and not shortCondition)
             debugMessage := debugMessage + "\n❌ Not in bullish trend (EMA Distance: " + str.tostring(emaDistance) + "%)"
         if (useVolumeFilter and not volumeOk)
             debugMessage := debugMessage + "\n❌ Volume too low (" + str.tostring(volume) + " < " + str.tostring(volumeThreshold) + ")"
+        if (useSessionFilter and not inSession)
+            debugMessage := debugMessage + "\n❌ Outside trading session"
+        if (useRsiDivergence and not bullishDivergence)
+            debugMessage := debugMessage + "\n❌ No bullish divergence detected (RSI: " + str.tostring(rsi) + ")"
         if (useStochFilter and stochK >= stochOversold)
             debugMessage := debugMessage + "\n❌ Stochastic not oversold (K: " + str.tostring(stochK) + " >= " + str.tostring(stochOversold) + ")"
         if (useMacdFilter and not isMacdBullish)
@@ -279,6 +395,10 @@ if (showDebug and candleCrossesEma and not longCondition and not shortCondition)
             debugMessage := debugMessage + "\n❌ Not in bearish trend (EMA Distance: " + str.tostring(emaDistance) + "%)"
         if (useVolumeFilter and not volumeOk)
             debugMessage := debugMessage + "\n❌ Volume too low (" + str.tostring(volume) + " < " + str.tostring(volumeThreshold) + ")"
+        if (useSessionFilter and not inSession)
+            debugMessage := debugMessage + "\n❌ Outside trading session"
+        if (useRsiDivergence and not bearishDivergence)
+            debugMessage := debugMessage + "\n❌ No bearish divergence detected (RSI: " + str.tostring(rsi) + ")"
         if (useStochFilter and stochK <= stochOverbought)
             debugMessage := debugMessage + "\n❌ Stochastic not overbought (K: " + str.tostring(stochK) + " <= " + str.tostring(stochOverbought) + ")"
         if (useMacdFilter and not isMacdBearish)
@@ -295,6 +415,8 @@ if (longCondition and enableLong)
     longTooltip := longTooltip + "📊 Volume: " + str.tostring(volume) + " (Threshold: " + str.tostring(volumeThreshold) + ")\n"
     longTooltip := longTooltip + "📏 Pullback: " + str.tostring(pullbackDistance) + "%\n"
     longTooltip := longTooltip + "📐 EMA Distance: " + str.tostring(emaDistance) + "%\n"
+    if useRsiDivergence
+        longTooltip := longTooltip + "📊 RSI: " + str.tostring(rsi) + " (Bullish Divergence: " + (bullishDivergence ? "✅" : "❌") + ")\n"
     if useStochFilter
         longTooltip := longTooltip + "📉 Stochastic K: " + str.tostring(stochK) + "\n"
     if useMacdFilter
@@ -319,6 +441,8 @@ if (shortCondition and enableShort)
     shortTooltip := shortTooltip + "📊 Volume: " + str.tostring(volume) + " (Threshold: " + str.tostring(volumeThreshold) + ")\n"
     shortTooltip := shortTooltip + "📏 Pullback: " + str.tostring(pullbackDistance) + "%\n"
     shortTooltip := shortTooltip + "📐 EMA Distance: " + str.tostring(emaDistance) + "%\n"
+    if useRsiDivergence
+        shortTooltip := shortTooltip + "📊 RSI: " + str.tostring(rsi) + " (Bearish Divergence: " + (bearishDivergence ? "✅" : "❌") + ")\n"
     if useStochFilter
         shortTooltip := shortTooltip + "📉 Stochastic K: " + str.tostring(stochK) + "\n"
     if useMacdFilter
