@@ -1,0 +1,397 @@
+//@version=5
+strategy("FaRSI", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=100, commission_type=strategy.commission.percent, commission_value=0.045)
+
+// =============================================================================
+// STRATEGY OVERVIEW
+// =============================================================================
+// This strategy identifies RSI divergences to catch potential trend reversals
+// and continuations. It detects 4 types of divergences:
+//
+// 1. Regular Bullish Divergence: Price makes lower low, RSI makes higher low
+// 2. Hidden Bullish Divergence: Price makes higher low, RSI makes lower low
+// 3. Regular Bearish Divergence: Price makes higher high, RSI makes lower high
+// 4. Hidden Bearish Divergence: Price makes lower high, RSI makes higher high
+//
+// Entry Conditions:
+// - Long positions on bullish divergences (regular or hidden)
+// - Short positions on bearish divergences (regular or hidden)
+//
+// Exit Conditions:
+// - Take profit at specified RSI level
+// - Stop loss (percentage or ATR-based)
+// - Opposite divergence signal
+//
+// Visual Indicators:
+// - RSI line with overbought/oversold levels
+// - Divergence markers with labels
+// - Debug information for setup analysis
+// - Position details on hover
+
+// =============================================================================
+// INPUT PARAMETERS
+// =============================================================================
+
+// RSI Settings
+rsiLength = input.int(9, "RSI Period", minval=1, group="RSI Settings")
+rsiSource = input.source(close, "RSI Source", group="RSI Settings")
+rsiOverbought = input.int(70, "RSI Overbought Level", minval=50, maxval=100, group="RSI Settings")
+rsiOversold = input.int(30, "RSI Oversold Level", minval=0, maxval=50, group="RSI Settings")
+
+// Pivot Settings
+pivotLeft = input.int(1, "Pivot Lookback Left", minval=1, group="Pivot Settings")
+pivotRight = input.int(3, "Pivot Lookback Right", minval=1, group="Pivot Settings")
+
+// Divergence Settings
+rangeUpper = input.int(60, "Max Lookback Range", minval=10, group="Divergence Settings")
+rangeLower = input.int(5, "Min Lookback Range", minval=1, group="Divergence Settings")
+plotRegularBull = input.bool(true, "Plot Regular Bullish", group="Divergence Settings")
+plotHiddenBull = input.bool(true, "Plot Hidden Bullish", group="Divergence Settings")
+plotRegularBear = input.bool(true, "Plot Regular Bearish", group="Divergence Settings")
+plotHiddenBear = input.bool(false, "Plot Hidden Bearish", group="Divergence Settings")
+
+// Position Settings
+enableLong = input.bool(true, "Enable Long Positions", group="Position Settings")
+enableShort = input.bool(false, "Enable Short Positions", group="Position Settings")
+
+// Exit Settings
+tpType = input.string("RSI Level", "Take Profit Type", options=["RSI Level", "Percentage"], group="Exit Settings")
+takeProfitLevel = input.int(80, "Take Profit at RSI Level", minval=70, maxval=100, group="Exit Settings")
+takeProfitPercent = input.float(2.0, "Take Profit %", minval=0.1, step=0.1, group="Exit Settings")
+
+// Risk Management
+slType = input.string("NONE", "Stop Loss Type", options=["NONE", "PERC", "ATR"], group="Risk Management")
+stopLossPercent = input.float(5.0, "Stop Loss %", minval=0.1, step=0.1, group="Risk Management")
+atrLength = input.int(14, "ATR Length", minval=1, group="Risk Management")
+atrMultiplier = input.float(3.5, "ATR Multiplier", minval=0.1, step=0.1, group="Risk Management")
+
+// Visual Settings
+showDebug = input.bool(true, "Show Debug Info", group="Debug Settings")
+showRsiValue = input.bool(true, "Show RSI Value on Chart", group="Visual Settings")
+bullColor = input.color(color.green, "Bullish Color", group="Visual Settings")
+bearColor = input.color(color.purple, "Bearish Color", group="Visual Settings")
+hiddenBullColor = input.color(color.new(color.green, 80), "Hidden Bullish Color", group="Visual Settings")
+hiddenBearColor = input.color(color.new(color.red, 80), "Hidden Bearish Color", group="Visual Settings")
+
+// =============================================================================
+// TECHNICAL CALCULATIONS
+// =============================================================================
+
+// RSI Calculation
+rsi = ta.rsi(rsiSource, rsiLength)
+
+// Pivot Detection
+plFound = not na(ta.pivotlow(rsi, pivotLeft, pivotRight))
+phFound = not na(ta.pivothigh(rsi, pivotLeft, pivotRight))
+
+// Range Check Function
+inRange(condition) =>
+    bars = ta.barssince(condition)
+    rangeLower <= bars and bars <= rangeUpper
+
+// ATR for stop loss
+atr = ta.atr(atrLength)
+
+// =============================================================================
+// PRICE CALCULATION HELPERS
+// =============================================================================
+
+// Calculate target profit price for long positions
+getLongTargetPrice() =>
+    if tpType == "RSI Level"
+        na  // RSI-based TP doesn't have a fixed price
+    else
+        close * (1 + takeProfitPercent / 100)
+
+// Calculate target profit price for short positions
+getShortTargetPrice() =>
+    if tpType == "RSI Level"
+        na  // RSI-based TP doesn't have a fixed price
+    else
+        close * (1 - takeProfitPercent / 100)
+
+// Calculate stop loss price for long positions
+getLongStopLossPrice() =>
+    if slType == "PERC"
+        close * (1 - stopLossPercent / 100)
+    else if slType == "ATR"
+        close - (atr * atrMultiplier)
+    else
+        na
+
+// Calculate stop loss price for short positions
+getShortStopLossPrice() =>
+    if slType == "PERC"
+        close * (1 + stopLossPercent / 100)
+    else if slType == "ATR"
+        close + (atr * atrMultiplier)
+    else
+        na
+
+// =============================================================================
+// DIVERGENCE DETECTION
+// =============================================================================
+
+// Regular Bullish Divergence
+// Price: Lower Low, RSI: Higher Low
+oscHL = rsi[pivotRight] > ta.valuewhen(plFound, rsi[pivotRight], 1) and inRange(plFound[1])
+priceLL = low[pivotRight] < ta.valuewhen(plFound, low[pivotRight], 1)
+regularBullCond = plotRegularBull and priceLL and oscHL and plFound
+
+// Hidden Bullish Divergence
+// Price: Higher Low, RSI: Lower Low
+oscLL = rsi[pivotRight] < ta.valuewhen(plFound, rsi[pivotRight], 1) and inRange(plFound[1])
+priceHL = low[pivotRight] > ta.valuewhen(plFound, low[pivotRight], 1)
+hiddenBullCond = plotHiddenBull and priceHL and oscLL and plFound
+
+// Regular Bearish Divergence
+// Price: Higher High, RSI: Lower High
+oscLH = rsi[pivotRight] < ta.valuewhen(phFound, rsi[pivotRight], 1) and inRange(phFound[1])
+priceHH = high[pivotRight] > ta.valuewhen(phFound, high[pivotRight], 1)
+regularBearCond = plotRegularBear and priceHH and oscLH and phFound
+
+// Hidden Bearish Divergence
+// Price: Lower High, RSI: Higher High
+oscHH = rsi[pivotRight] > ta.valuewhen(phFound, rsi[pivotRight], 1) and inRange(phFound[1])
+priceLH = high[pivotRight] < ta.valuewhen(phFound, high[pivotRight], 1)
+hiddenBearCond = plotHiddenBear and priceLH and oscHH and phFound
+
+// Combined Conditions
+longCondition = enableLong and (regularBullCond or hiddenBullCond)
+shortCondition = enableShort and (regularBearCond or hiddenBearCond)
+
+// =============================================================================
+// RISK MANAGEMENT
+// =============================================================================
+
+// Stop Loss Calculation
+slValue = slType == "ATR" ? atr * atrMultiplier : slType == "PERC" ? close * stopLossPercent / 100 : 0.0
+
+// Trailing Stop Loss
+var float trailingSL = na
+trailingSL := strategy.position_size >= 1 ? math.max(low - slValue, nz(trailingSL[1])) : na
+
+// Exit Conditions
+longCloseCondition = (tpType == "RSI Level" and ta.crossover(rsi, takeProfitLevel)) or (tpType == "Percentage" and close >= strategy.position_avg_price * (1 + takeProfitPercent / 100)) or regularBearCond
+
+shortCloseCondition = (tpType == "RSI Level" and ta.crossunder(rsi, 100 - takeProfitLevel)) or (tpType == "Percentage" and close <= strategy.position_avg_price * (1 - takeProfitPercent / 100)) or regularBullCond
+
+// =============================================================================
+// DEBUG INFORMATION
+// =============================================================================
+
+// Debug message for bullish setups
+if showDebug and (regularBullCond or hiddenBullCond) and not longCondition
+    debugMessage = "ℹ️ RSI Divergence Debug Info:\n"
+    debugMessage := debugMessage + "📊 RSI: " + str.tostring(rsi, "#.##") + "\n"
+    debugMessage := debugMessage + "📈 RSI Previous: " + str.tostring(rsi[pivotRight], "#.##") + "\n"
+    debugMessage := debugMessage + "💰 Price: " + str.tostring(close, "#.##") + "\n"
+    debugMessage := debugMessage + "📉 Price Previous: " + str.tostring(low[pivotRight], "#.##") + "\n"
+    debugMessage := debugMessage + "🔄 Regular Bull: " + (regularBullCond ? "✅ Yes" : "❌ No") + "\n"
+    debugMessage := debugMessage + "🔄 Hidden Bull: " + (hiddenBullCond ? "✅ Yes" : "❌ No") + "\n"
+    debugMessage := debugMessage + "📊 Pivot Found: " + (plFound ? "✅ Yes" : "❌ No") + "\n"
+    debugMessage := debugMessage + "📏 Range Check: " + (inRange(plFound[1]) ? "✅ Yes" : "❌ No") + "\n"
+    debugMessage := debugMessage + "🎯 Take Profit Type: " + tpType + "\n"
+    if tpType == "RSI Level"
+        debugMessage := debugMessage + "🎯 Take Profit Level: " + str.tostring(takeProfitLevel) + "\n"
+    else
+        debugMessage := debugMessage + "🎯 Take Profit %: " + str.tostring(takeProfitPercent) + "%\n"
+    
+    // Add target profit price info
+    longTargetPrice = getLongTargetPrice()
+    if not na(longTargetPrice)
+        debugMessage := debugMessage + "🎯 Target Profit Price: " + str.tostring(longTargetPrice, "#.##") + "\n"
+    
+    debugMessage := debugMessage + "🛑 Stop Loss Type: " + slType + "\n"
+    if slType != "NONE"
+        debugMessage := debugMessage + "🛑 Stop Loss Value: " + str.tostring(slValue, "#.##") + "\n"
+        longStopPrice = getLongStopLossPrice()
+        if not na(longStopPrice)
+            debugMessage := debugMessage + "🛑 Stop Loss Price: " + str.tostring(longStopPrice, "#.##") + "\n"
+    
+    if not enableLong
+        debugMessage := debugMessage + "\n❌ Long positions disabled"
+    
+    label.new(bar_index, low - (high - low) * 0.1, "💡", color=color.new(color.green, 70), style=label.style_label_up, textcolor=color.white, size=size.small, tooltip=debugMessage)
+
+// Debug message for bearish setups
+if showDebug and (regularBearCond or hiddenBearCond) and not shortCondition
+    debugMessage = "ℹ️ RSI Divergence Debug Info:\n"
+    debugMessage := debugMessage + "📊 RSI: " + str.tostring(rsi, "#.##") + "\n"
+    debugMessage := debugMessage + "📉 RSI Previous: " + str.tostring(rsi[pivotRight], "#.##") + "\n"
+    debugMessage := debugMessage + "💰 Price: " + str.tostring(close, "#.##") + "\n"
+    debugMessage := debugMessage + "📈 Price Previous: " + str.tostring(high[pivotRight], "#.##") + "\n"
+    debugMessage := debugMessage + "🔄 Regular Bear: " + (regularBearCond ? "✅ Yes" : "❌ No") + "\n"
+    debugMessage := debugMessage + "🔄 Hidden Bear: " + (hiddenBearCond ? "✅ Yes" : "❌ No") + "\n"
+    debugMessage := debugMessage + "📊 Pivot Found: " + (phFound ? "✅ Yes" : "❌ No") + "\n"
+    debugMessage := debugMessage + "📏 Range Check: " + (inRange(phFound[1]) ? "✅ Yes" : "❌ No") + "\n"
+    debugMessage := debugMessage + "🎯 Take Profit Type: " + tpType + "\n"
+    if tpType == "RSI Level"
+        debugMessage := debugMessage + "🎯 Take Profit Level: " + str.tostring(100 - takeProfitLevel) + "\n"
+    else
+        debugMessage := debugMessage + "🎯 Take Profit %: " + str.tostring(takeProfitPercent) + "%\n"
+    
+    // Add target profit price info
+    shortTargetPrice = getShortTargetPrice()
+    if not na(shortTargetPrice)
+        debugMessage := debugMessage + "🎯 Target Profit Price: " + str.tostring(shortTargetPrice, "#.##") + "\n"
+    
+    debugMessage := debugMessage + "🛑 Stop Loss Type: " + slType + "\n"
+    if slType != "NONE"
+        debugMessage := debugMessage + "🛑 Stop Loss Value: " + str.tostring(slValue, "#.##") + "\n"
+        shortStopPrice = getShortStopLossPrice()
+        if not na(shortStopPrice)
+            debugMessage := debugMessage + "🛑 Stop Loss Price: " + str.tostring(shortStopPrice, "#.##") + "\n"
+    
+    if not enableShort
+        debugMessage := debugMessage + "\n❌ Short positions disabled"
+    
+    label.new(bar_index, high + (high - low) * 0.1, "💡", color=color.new(color.red, 70), style=label.style_label_down, textcolor=color.white, size=size.small, tooltip=debugMessage)
+
+// =============================================================================
+// POSITION LABELS
+// =============================================================================
+
+// Long position details
+if longCondition and enableLong
+    longTooltip = "🔼 LONG Position Details:\n"
+    longTooltip := longTooltip + "📊 RSI: " + str.tostring(rsi, "#.##") + "\n"
+    longTooltip := longTooltip + "💰 Entry: " + str.tostring(close, "#.##") + "\n"
+    if tpType == "RSI Level"
+        longTooltip := longTooltip + "🎯 Take Profit: RSI " + str.tostring(takeProfitLevel) + "\n"
+    else
+        longTooltip := longTooltip + "🎯 Take Profit: " + str.tostring(takeProfitPercent) + "% (" + str.tostring(strategy.position_avg_price * (1 + takeProfitPercent / 100), "#.##") + ")\n"
+    longTooltip := longTooltip + "🛑 Stop Loss: " + (slType == "NONE" ? "None" : str.tostring(slValue, "#.##")) + "\n"
+    longTooltip := longTooltip + "📊 Divergence Type: " + (regularBullCond ? "Regular Bullish" : "Hidden Bullish") + "\n"
+    longTooltip := longTooltip + "📏 Price Change: " + str.tostring((low[pivotRight] - low) / low * 100, "#.##") + "%\n"
+    longTooltip := longTooltip + "📊 RSI Change: " + str.tostring((rsi - rsi[pivotRight]) / rsi[pivotRight] * 100, "#.##") + "%\n"
+    
+    label.new(bar_index, low, "🔼", color=color.new(bullColor, 70), style=label.style_label_up, textcolor=color.white, size=size.small, tooltip=longTooltip)
+
+// Short position details
+if shortCondition and enableShort
+    shortTooltip = "🔽 SHORT Position Details:\n"
+    shortTooltip := shortTooltip + "📊 RSI: " + str.tostring(rsi, "#.##") + "\n"
+    shortTooltip := shortTooltip + "💰 Entry: " + str.tostring(close, "#.##") + "\n"
+    if tpType == "RSI Level"
+        shortTooltip := shortTooltip + "🎯 Take Profit: RSI " + str.tostring(100 - takeProfitLevel) + "\n"
+    else
+        shortTooltip := shortTooltip + "🎯 Take Profit: " + str.tostring(takeProfitPercent) + "% (" + str.tostring(strategy.position_avg_price * (1 - takeProfitPercent / 100), "#.##") + ")\n"
+    shortTooltip := shortTooltip + "🛑 Stop Loss: " + (slType == "NONE" ? "None" : str.tostring(slValue, "#.##")) + "\n"
+    shortTooltip := shortTooltip + "📊 Divergence Type: " + (regularBearCond ? "Regular Bearish" : "Hidden Bearish") + "\n"
+    shortTooltip := shortTooltip + "📏 Price Change: " + str.tostring((high - high[pivotRight]) / high[pivotRight] * 100, "#.##") + "%\n"
+    shortTooltip := shortTooltip + "📊 RSI Change: " + str.tostring((rsi[pivotRight] - rsi) / rsi * 100, "#.##") + "%\n"
+    
+    label.new(bar_index, high, "🔽", color=color.new(bearColor, 70), style=label.style_label_down, textcolor=color.white, size=size.small, tooltip=shortTooltip)
+
+// =============================================================================
+// VISUAL PLOTTING
+// =============================================================================
+
+// RSI Line (hidden from main chart but available for alerts)
+plot(rsi, title="RSI", linewidth=0, color=color.new(color.white, 100), display=display.none)
+
+// Price-based divergence markers
+// Regular Bullish Divergence
+plotshape(regularBullCond, title="Regular Bullish Signal", text="Bull", style=shape.triangleup, location=location.belowbar, color=bullColor, textcolor=color.white, size=size.small)
+
+// Hidden Bullish Divergence
+plotshape(hiddenBullCond, title="Hidden Bullish Signal", text="H Bull", style=shape.triangleup, location=location.belowbar, color=hiddenBullColor, textcolor=color.white, size=size.small)
+
+// Regular Bearish Divergence
+plotshape(regularBearCond, title="Regular Bearish Signal", text="Bear", style=shape.triangledown, location=location.abovebar, color=bearColor, textcolor=color.white, size=size.small)
+
+// Hidden Bearish Divergence
+plotshape(hiddenBearCond, title="Hidden Bearish Signal", text="H Bear", style=shape.triangledown, location=location.abovebar, color=hiddenBearColor, textcolor=color.white, size=size.small)
+
+// Trailing Stop Loss
+plot(strategy.position_size >= 1 ? trailingSL : na, title="Trailing Stop Loss", style=plot.style_linebr, linewidth=1, color=color.blue, transp=30)
+
+// RSI Level indicators on price chart
+// Show RSI levels as horizontal lines when divergences occur
+plot(regularBullCond or hiddenBullCond ? close : na, title="Bullish Divergence Price", linewidth=2, color=bullColor, transp=0)
+plot(regularBearCond or hiddenBearCond ? close : na, title="Bearish Divergence Price", linewidth=2, color=bearColor, transp=0)
+
+// RSI Level background indicators
+// Show when RSI is in overbought/oversold zones
+rsiOverboughtZone = rsi >= rsiOverbought
+rsiOversoldZone = rsi <= rsiOversold
+
+// Background coloring for RSI zones
+bgcolor(rsiOverboughtZone ? color.new(color.red, 95) : na, title="RSI Overbought Zone")
+bgcolor(rsiOversoldZone ? color.new(color.green, 95) : na, title="RSI Oversold Zone")
+
+// RSI level text labels
+if rsiOverboughtZone and not rsiOverboughtZone[1]
+    label.new(bar_index, high, "RSI Overbought", color=color.new(color.red, 80), style=label.style_label_down, textcolor=color.white, size=size.small)
+
+if rsiOversoldZone and not rsiOversoldZone[1]
+    label.new(bar_index, low, "RSI Oversold", color=color.new(color.green, 80), style=label.style_label_up, textcolor=color.white, size=size.small)
+
+// RSI Value Display
+if showRsiValue and barstate.islast
+    rsiColor = rsi >= rsiOverbought ? color.red : rsi <= rsiOversold ? color.green : color.gray
+    label.new(bar_index, high, "RSI: " + str.tostring(rsi, "#.#"), color=color.new(rsiColor, 80), style=label.style_label_down, textcolor=color.white, size=size.normal)
+
+// =============================================================================
+// STRATEGY EXECUTION
+// =============================================================================
+
+// Entry Orders
+if longCondition and enableLong
+    strategy.entry("RSI Div Long", strategy.long)
+
+if shortCondition and enableShort
+    strategy.entry("RSI Div Short", strategy.short)
+
+// Exit Orders
+if strategy.position_size >= 1 and slType == "NONE" and longCloseCondition
+    strategy.close("RSI Div Long", comment="Close All=" + str.tostring(close - strategy.position_avg_price, "####.##"))
+
+if strategy.position_size <= -1 and slType == "NONE" and shortCloseCondition
+    strategy.close("RSI Div Short", comment="Close All=" + str.tostring(strategy.position_avg_price - close, "####.##"))
+
+// Percentage-based take profit exits
+if strategy.position_size >= 1 and tpType == "Percentage" and close >= strategy.position_avg_price * (1 + takeProfitPercent / 100)
+    strategy.close("RSI Div Long", comment="TP%=" + str.tostring(close - strategy.position_avg_price, "####.##"))
+
+if strategy.position_size <= -1 and tpType == "Percentage" and close <= strategy.position_avg_price * (1 - takeProfitPercent / 100)
+    strategy.close("RSI Div Short", comment="TP%=" + str.tostring(strategy.position_avg_price - close, "####.##"))
+
+// Stop Loss Exits
+if strategy.position_size >= 1 and (slType == "PERC" or slType == "ATR") and ta.crossunder(close, trailingSL)
+    strategy.close("RSI Div Long", comment="TSL=" + str.tostring(close - strategy.position_avg_price, "####.##"))
+
+if strategy.position_size <= -1 and (slType == "PERC" or slType == "ATR") and ta.crossover(close, trailingSL)
+    strategy.close("RSI Div Short", comment="TSL=" + str.tostring(strategy.position_avg_price - close, "####.##"))
+
+// =============================================================================
+// ALERTS
+// =============================================================================
+
+// Entry Alerts
+if longCondition and enableLong
+    longTargetPrice = getLongTargetPrice()
+    longStopPrice = getLongStopLossPrice()
+    alertMessage = "LONG " + syminfo.ticker + " | RSI: " + str.tostring(rsi, "#.#") + " | Divergence: Bullish"
+    if not na(longTargetPrice)
+        alertMessage := alertMessage + " | TP: " + str.tostring(longTargetPrice, "#.##")
+    if not na(longStopPrice)
+        alertMessage := alertMessage + " | SL: " + str.tostring(longStopPrice, "#.##")
+    alert(alertMessage, alert.freq_once_per_bar)
+
+if shortCondition and enableShort
+    shortTargetPrice = getShortTargetPrice()
+    shortStopPrice = getShortStopLossPrice()
+    alertMessage = "SHORT " + syminfo.ticker + " | RSI: " + str.tostring(rsi, "#.#") + " | Divergence: Bearish"
+    if not na(shortTargetPrice)
+        alertMessage := alertMessage + " | TP: " + str.tostring(shortTargetPrice, "#.##")
+    if not na(shortStopPrice)
+        alertMessage := alertMessage + " | SL: " + str.tostring(shortStopPrice, "#.##")
+    alert(alertMessage, alert.freq_once_per_bar)
+
+// Exit Alerts
+if longCloseCondition and strategy.position_size >= 1
+    alert("EXIT LONG " + syminfo.ticker + " | RSI: " + str.tostring(rsi, "#.#") + " | Reason: Take Profit or Bearish Signal", alert.freq_once_per_bar)
+
+if shortCloseCondition and strategy.position_size <= -1
+    alert("EXIT SHORT " + syminfo.ticker + " | RSI: " + str.tostring(rsi, "#.#") + " | Reason: Take Profit or Bullish Signal", alert.freq_once_per_bar)
