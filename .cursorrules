@@ -1,0 +1,29 @@
+# Cursor AI Context for mypine project
+
+This is a Pine Script trading strategy collection project.
+
+## Project Structure
+- `nakinvest/` - Main Pine Script strategies
+- `backtest/` - Backtesting utilities and market data
+- `indicators/` - Custom Pine Script indicators
+- `module2/` - Utility modules for candle identification
+
+## Key Context
+- All strategies are written in Pine Script for TradingView
+- Focus on EMA-based strategies, pullback patterns, and RSI divergences
+- Market data includes crypto pairs (BTC, ETH, BNB, SOL, LINK, TRX)
+- Backtesting uses Python with JSON market data
+- Strategies include: EMA crossovers, pullback patterns, hotzone analysis, three-bar reversals
+
+## Coding Standards
+- Follow Pine Script v5 syntax
+- Include proper comments for strategy logic
+- Use descriptive variable names
+- Include risk management parameters
+
+## Files to Focus On
+- Strategy files: `.pine` files in nakinvest/
+- Backtesting: `strategy_backtest.py`
+- Custom indicators: files in `indicators/` directory
+
+
