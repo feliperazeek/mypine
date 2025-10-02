@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "mypine"
+version = "0.1.0"
+description = "Pine Script trading strategies with Python backtesting framework"
+authors = ["Your Name <your.email@example.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+pandas = "^2.2.0"
+numpy = "^2.0.0"
+requests = "^2.31.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+black = "^23.0.0"
+flake8 = "^6.0.0"
+
+[tool.poetry.scripts]
+download-data = "backtest.download_all_data:download_all_data"
+backtest-rsi = "backtest.rsi_div.run_backtest:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
