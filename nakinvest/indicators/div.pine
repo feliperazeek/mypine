@@ -1,0 +1,1145 @@
+// This work is licensed under a Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0) https://creativecommons.org/licenses/by-nc-sa/4.0/
+// © Trading_Paradise
+
+
+//@version=5
+
+
+
+indicator("RSI DIVERGENCES", overlay=true, max_labels_count = 500, max_lines_count = 500)
+
+
+
+
+
+
+// Input
+rsiLength = input.int(title="RSI Length", defval=14, minval=1)
+smoothK = input.int(title="Smooth K", defval=3, minval=1)
+stochLength = input.int(title="Stochastic Length", defval=14, minval=1)
+bulldivcol = input.color(defval = color.green, title = 'Bullish Div Color', inline = "1")
+beardivcol = input.color(defval = color.red, title = 'Bearish Div Color', inline = "1")
+divwidth = input.int(defval = 1, title="Divergence Line Width", minval=1, maxval=4)
+_m = input.string(title="Margin", defval="1", tooltip = "The input value determines the extent of divergence considered by the system between the RSI and price. A lower input value, approaching 0, means the system focuses on smaller, more immediate divergences. On the other hand, a higher input value, up to 2, allows the system to consider larger divergences by comparing those that are more distant in time. Essentially, the input value adjusts the breadth of the divergence examination, with lower values focusing on the short term, and higher values examining longer-term trends. 1 is a good Compromise ", options=["0", "0.236", "0.382", "0.5", "0.618", "0.786", "1", "1.272", "1.618", "1.786", "2"])  
+atr = ta.atr(14)
+
+
+
+
+
+
+
+
+
+// RSI
+rsi = ta.rsi(close, rsiLength)
+
+
+
+
+
+
+// PLOT DIVERGENCES ON CHART
+
+
+
+
+
+
+nwh = close > open ? close : na
+nwl = close < open ? close : na
+
+
+
+
+
+
+
+
+
+
+
+
+
+nwh_ = close > open ? high : close < open ? high : na
+nwl_ = close > open ? low : close < open ? low : na
+
+
+
+
+
+
+
+
+
+
+LB = 1               	 
+RB = 1             	 
+
+
+
+
+
+
+
+
+
+ph = ta.pivothigh(nwh, LB, RB)    
+pl = ta.pivotlow(nwl, LB, RB) 	 
+ph_ = ta.pivothigh(nwh_, LB, RB)    
+pl_ = ta.pivotlow(nwl_, LB, RB)
+rh = ta.pivothigh(rsi, LB, RB) 	 
+rl = ta.pivotlow(rsi, LB, RB) 	 
+
+
+
+
+hh0 = ta.valuewhen(ph, nwh[1], 0)                                   	 
+ll0 = ta.valuewhen(pl, nwl[1], 0)                                   	 
+rsih0 = hh0 ? ta.valuewhen(ph, rsi[1], 0) : na
+rsil0 = ll0 ? ta.valuewhen(pl, rsi[1], 0) : na
+
+
+
+
+
+
+
+
+hh1 = hh0 ? ta.valuewhen(ph, nwh[1], 1) : na  
+hh1_ = hh0 ? ta.valuewhen(ph, nwh_[1], 1) : na  
+ll1 = ll0 ? ta.valuewhen(pl, nwl[1], 1) : na                                 	 
+ll1_ = ll0 ? ta.valuewhen(pl, nwl_[1], 1) : na
+rsih1 = hh0 ? ta.valuewhen(ph, rsi[1], 1) : na
+rsil1 = ll0 ? ta.valuewhen(pl, rsi[1], 1) : na
+//plotshape(ll1 and pl ? ll1 : na)
+
+
+
+
+
+
+
+
+
+
+hh2 = hh0 ? ta.valuewhen(ph, nwh[1], 2) : na  
+hh2_ = hh0 ? ta.valuewhen(ph, nwh_[1], 2) : na
+ll2 = ll0 ? ta.valuewhen(pl, nwl[1], 2) : na
+ll2_ = ll0 ? ta.valuewhen(pl, nwl_[1], 2) : na
+rsih2 = hh0 ? ta.valuewhen(ph, rsi[1], 2) : na
+rsil2 = ll0 ? ta.valuewhen(pl, rsi[1], 2) : na
+
+
+
+
+
+
+
+
+
+hh3 = hh0 ? ta.valuewhen(ph, nwh[1], 3) : na  
+hh3_ = hh0 ? ta.valuewhen(ph, nwh_[1], 3) : na
+ll3 = ll0 ? ta.valuewhen(pl, nwl[1], 3) : na
+ll3_ = ll0 ? ta.valuewhen(pl, nwl_[1], 3) : na
+rsih3 = hh0 ? ta.valuewhen(ph, rsi[1], 3) : na
+rsil3 = ll0 ? ta.valuewhen(pl, rsi[1], 3) : na
+
+
+
+
+
+
+
+
+hh4 = hh0 ? ta.valuewhen(ph, nwh[1], 4) : na  
+hh4_ = hh0 ? ta.valuewhen(ph, nwh_[1], 4) : na
+ll4 = ll0 ? ta.valuewhen(pl, nwl[1], 4) : na
+ll4_ = ll0 ? ta.valuewhen(pl, nwl_[1], 4) : na
+rsih4 = hh0 ? ta.valuewhen(ph, rsi[1], 4) : na
+rsil4 = ll0 ? ta.valuewhen(pl, rsi[1], 4) : na
+
+
+
+
+
+hh5 = hh0 ? ta.valuewhen(ph, nwh[1], 5) : na  
+hh5_ = hh0 ? ta.valuewhen(ph, nwh_[1], 5) : na
+ll5 = ll0 ? ta.valuewhen(pl, nwl[1], 5) : na
+ll5_ = ll0 ? ta.valuewhen(pl, nwl_[1], 5) : na
+rsih5 = hh0 ? ta.valuewhen(ph, rsi[1], 5) : na
+rsil5 = ll0 ? ta.valuewhen(pl, rsi[1], 5) : na
+
+
+
+
+
+
+
+
+
+hh6 = hh0 ? ta.valuewhen(ph, nwh[1], 6) : na  
+hh6_ = hh0 ? ta.valuewhen(ph, nwh_[1], 6) : na
+ll6 = ll0 ? ta.valuewhen(pl, nwl[1], 6) : na
+ll6_ = ll0 ? ta.valuewhen(pl, nwl_[1], 6) : na
+rsih6 = hh0 ? ta.valuewhen(ph, rsi[1], 6) : na
+rsil6 = ll0 ? ta.valuewhen(pl, rsi[1], 6) : na
+
+
+
+
+
+
+
+
+
+
+hh7 = hh0 ? ta.valuewhen(ph, nwh[1], 7) : na  
+hh7_ = hh0 ? ta.valuewhen(ph, nwh_[1], 7) : na
+ll7 = ll0 ? ta.valuewhen(pl, nwl[1], 7) : na
+ll7_ = ll0 ? ta.valuewhen(pl, nwl_[1], 7) : na
+rsih7 = hh0 ? ta.valuewhen(ph, rsi[1], 7) : na
+rsil7 = ll0 ? ta.valuewhen(pl, rsi[1], 7) : na
+
+
+
+
+
+
+
+
+
+hh8 = hh0 ? ta.valuewhen(ph, nwh[1], 8) : na  
+hh8_ = hh0 ? ta.valuewhen(ph, nwh_[1], 8) : na
+ll8 = ll0 ? ta.valuewhen(pl, nwl[1], 8) : na
+ll8_ = ll0 ? ta.valuewhen(pl, nwl_[1], 8) : na
+rsih8 = hh0 ? ta.valuewhen(ph, rsi[1], 8) : na
+rsil8 = ll0 ? ta.valuewhen(pl, rsi[1], 8) : na
+
+
+
+
+
+
+
+
+
+
+
+m = 0.5
+if _m == "0"
+	m := 0
+else
+	if _m == "0.236"
+    	m := 0.236
+	else
+    	if _m == "0.382"
+        	m := 0.382
+    	else
+        	if _m == "0.5"
+            	m := 0.5
+        	else
+            	if _m == "0.618"
+                	m := 0.618
+            	else
+                	if _m == "0.786"
+                    	m := 0.786
+                	else
+                    	if _m == "1"
+                        	m := 1
+                    	else
+                        	if _m == "1.272"
+                            	m := 1.272
+                        	else
+                            	if _m == "1.618"
+                                	m := 1.618
+                            	else
+                                	if _m == "1.786"
+                                    	m := 1.786
+                                	else
+                                    	if _m == "2"
+                                        	m := 2
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Bullish Divergences = close LL - RSI HL
+
+
+
+
+
+close_LL1 = ll0 < ll1
+rsi_HL1 = rsil0 > rsil1
+
+
+
+
+
+
+
+
+
+
+close_LL2 = ll0 < ll2
+ and ll1 > ll0 and ll1 > (ll2_ - ((ll2_ - ll0) * m))
+rsi_HL2 = rsil0 > rsil2
+ and rsil1 > rsil2
+ and rsil1 > (rsil2 + ((rsil0 - rsil2) / 2))
+
+
+
+
+
+
+
+
+
+
+
+close_LL3 = ll0 < ll3
+ and ll1 > ll0 and ll1 > (ll3_ - ((ll3_ - ll0) * m))
+ and ll2 > ll0 and ll2 > (ll3_ - ((ll3_ - ll0) * m))
+rsi_HL3 = rsil0 > rsil3
+ and rsil1 > (rsil3 + ((rsil0 - rsil3) / 2))
+ and rsil2 > (rsil3 + ((rsil0 - rsil3) / 2))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+close_LL4 = ll0 < ll4
+ and ll1 > ll0 and ll1 > (ll4_ - ((ll4_ - ll0) * m))
+ and ll2 > ll0 and ll2 > (ll4_ - ((ll4_ - ll0) * m))
+ and ll3 > ll0 and ll3 > (ll4_ - ((ll4_ - ll0) * m))
+rsi_HL4 = rsil0 > rsil4
+ and rsil1 > (rsil4 + ((rsil0 - rsil4) / 2))
+ and rsil2 > (rsil4 + ((rsil0 - rsil4) / 2))
+ and rsil3 > (rsil4 + ((rsil0 - rsil4) / 2))
+
+
+
+
+
+
+
+
+
+
+
+
+
+close_LL5 = ll0 < ll5
+ and ll1 > ll0 and ll1 > (ll5_ - ((ll5_ - ll0) * m))
+ and ll2 > ll0 and ll2 > (ll5_ - ((ll5_ - ll0) * m))
+ and ll3 > ll0 and ll3 > (ll5_ - ((ll5_ - ll0) * m))
+ and ll4 > ll0 and ll4 > (ll5_ - ((ll5_ - ll0) * m))
+rsi_HL5 = rsil0 > rsil5
+ and rsil1 > (rsil5 + ((rsil0 - rsil5) / 2))
+ and rsil2 > (rsil5 + ((rsil0 - rsil5) / 2))
+ and rsil3 > (rsil5 + ((rsil0 - rsil5) / 2))
+ and rsil4 > (rsil5 + ((rsil0 - rsil5) / 2))
+
+
+
+
+
+
+
+
+
+
+
+close_LL6 = ll0 < ll6
+ and ll1 > ll0 and ll1 > (ll6_ - ((ll6_ - ll0) * m))
+ and ll2 > ll0 and ll2 > (ll6_ - ((ll6_ - ll0) * m))
+ and ll3 > ll0 and ll3 > (ll6_ - ((ll6_ - ll0) * m))
+ and ll4 > ll0 and ll4 > (ll6_ - ((ll6_ - ll0) * m))
+ and ll5 > ll0 and ll5 > (ll6_ - ((ll6_ - ll0) * m))
+rsi_HL6 = rsil0 > rsil6
+ and rsil1 > (rsil6 + ((rsil0 - rsil6) / 2))
+ and rsil2 > (rsil6 + ((rsil0 - rsil6) / 2))
+ and rsil3 > (rsil6 + ((rsil0 - rsil6) / 2))
+ and rsil4 > (rsil6 + ((rsil0 - rsil6) / 2))
+ and rsil5 > (rsil6 + ((rsil0 - rsil6) / 2))
+
+
+
+
+
+
+
+
+
+
+
+close_LL7 = ll0 < ll7
+ and ll1 > ll0 and ll1 > (ll7_ - ((ll7_ - ll0) * m))
+ and ll2 > ll0 and ll2 > (ll7_ - ((ll7_ - ll0) * m))
+ and ll3 > ll0 and ll3 > (ll7_ - ((ll7_ - ll0) * m))
+ and ll4 > ll0 and ll4 > (ll7_ - ((ll7_ - ll0) * m))
+ and ll5 > ll0 and ll5 > (ll7_ - ((ll7_ - ll0) * m))
+ and ll6 > ll0 and ll6 > (ll7_ - ((ll7_ - ll0) * m))
+rsi_HL7 = rsil0 > rsil7
+ and rsil1 > (rsil7 + ((rsil0 - rsil7) / 2))
+ and rsil2 > (rsil7 + ((rsil0 - rsil7) / 2))
+ and rsil3 > (rsil7 + ((rsil0 - rsil7) / 2))
+ and rsil4 > (rsil7 + ((rsil0 - rsil7) / 2))
+ and rsil5 > (rsil7 + ((rsil0 - rsil7) / 2))
+ and rsil6 > (rsil7 + ((rsil0 - rsil7) / 2))
+
+
+
+
+
+
+
+
+
+
+
+
+close_LL8 = ll0 < ll8
+ and ll1 > ll0 and ll1 > (ll8_ - ((ll8_ - ll0) * m))
+ and ll2 > ll0 and ll2 > (ll8_ - ((ll8_ - ll0) * m))
+ and ll3 > ll0 and ll3 > (ll8_ - ((ll8_ - ll0) * m))
+ and ll4 > ll0 and ll4 > (ll8_ - ((ll8_ - ll0) * m))
+ and ll5 > ll0 and ll5 > (ll8_ - ((ll8_ - ll0) * m))
+ and ll6 > ll0 and ll6 > (ll8_ - ((ll8_ - ll0) * m))
+ and ll7 > ll0 and ll7 > (ll8_ - ((ll8_ - ll0) * m))
+rsi_HL8 = rsil0 > rsil8
+ and rsil1 > (rsil8 + ((rsil0 - rsil8) / 2))
+ and rsil2 > (rsil8 + ((rsil0 - rsil8) / 2))
+ and rsil3 > (rsil8 + ((rsil0 - rsil8) / 2))
+ and rsil4 > (rsil8 + ((rsil0 - rsil8) / 2))
+ and rsil5 > (rsil8 + ((rsil0 - rsil8) / 2))
+ and rsil6 > (rsil8 + ((rsil0 - rsil8) / 2))
+ and rsil7 > (rsil8 + ((rsil0 - rsil8) / 2))
+
+
+
+
+
+
+
+
+
+
+
+
+div_bull_1 = close_LL1 and rsi_HL1
+div_bull_2 = close_LL2 and rsi_HL2
+div_bull_3 = close_LL3 and rsi_HL3
+div_bull_4 = close_LL4 and rsi_HL4
+div_bull_5 = close_LL5 and rsi_HL5
+div_bull_6 = close_LL6 and rsi_HL6
+div_bull_7 = close_LL7 and rsi_HL7
+div_bull_8 = close_LL8 and rsi_HL8
+   
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+// Bearish Divergences = close HH - RSI LH
+
+
+
+
+
+
+close_HH1 = hh0 > hh1
+rsi_LH1 = rsih0 < rsih1
+
+
+
+
+
+
+
+
+
+close_HH2 = hh0 > hh2
+ and hh1 < hh0 and hh1 < (hh2_ + ((hh0 - hh2_) * m))
+rsi_LH2 = rsih0 < rsih2
+ and rsih1 < (rsih2 - ((rsih2 - rsih0) / 2))
+
+
+
+
+
+
+close_HH3 = hh0 > hh3
+ and hh1 < hh0 and hh1 < (hh3_ + ((hh0 - hh3_) * m))
+ and hh2 < hh0 and hh2 < (hh3_ + ((hh0 - hh3_) * m))
+rsi_LH3 = rsih0 < rsih3
+ and rsih1 < (rsih3 - ((rsih3 - rsih0) / 2))  
+ and rsih2 < (rsih3 - ((rsih3 - rsih0) / 2))  
+
+
+
+
+
+
+
+
+
+close_HH4 = hh0 > hh4
+ and hh1 < hh0 and hh1 < (hh4_ + ((hh0 - hh4_) * m))
+ and hh2 < hh0 and hh2 < (hh4_ + ((hh0 - hh4_) * m))  
+ and hh3 < hh0 and hh3 < (hh4_ + ((hh0 - hh4_) * m))
+rsi_LH4 = rsih0 < rsih4
+ and rsih1 < (rsih4 - ((rsih4 - rsih0) / 2))  
+ and rsih2 < (rsih4 - ((rsih4 - rsih0) / 2))  
+ and rsih3 < (rsih4 - ((rsih4 - rsih0) / 2))
+
+
+
+
+
+
+
+
+
+close_HH5 = hh0 > hh5
+ and hh1 < hh0 and hh1 < (hh5_ + ((hh0 - hh5_) * m))  
+ and hh2 < hh0 and hh2 < (hh5_ + ((hh0 - hh5_) * m))  
+ and hh3 < hh0 and hh3 < (hh5_ + ((hh0 - hh5_) * m))  
+ and hh4 < hh0 and hh4 < (hh5_ + ((hh0 - hh5_) * m))
+rsi_LH5 = rsih0 < rsih5
+ and rsih1 < (rsih5 - ((rsih5 - rsih0) / 2))  
+ and rsih2 < (rsih5 - ((rsih5 - rsih0) / 2))  
+ and rsih3 < (rsih5 - ((rsih5 - rsih0) / 2))  
+ and rsih4 < (rsih5 - ((rsih5 - rsih0) / 2))
+
+
+
+
+
+
+close_HH6 = hh0 > hh6
+ and hh1 < hh0 and hh1 < (hh6_ + ((hh0 - hh6_) * m))  
+ and hh2 < hh0 and hh2 < (hh6_ + ((hh0 - hh6_) * m))  
+ and hh3 < hh0 and hh3 < (hh6_ + ((hh0 - hh6_) * m))  
+ and hh4 < hh0 and hh4 < (hh6_ + ((hh0 - hh6_) * m))  
+ and hh5 < hh0 and hh5 < (hh6_ + ((hh0 - hh6_) * m))
+rsi_LH6 = rsih0 < rsih6
+ and rsih1 < (rsih6 - ((rsih6 - rsih0) / 2))  
+ and rsih2 < (rsih6 - ((rsih6 - rsih0) / 2))  
+ and rsih3 < (rsih6 - ((rsih6 - rsih0) / 2))  
+ and rsih4 < (rsih6 - ((rsih6 - rsih0) / 2))  
+ and rsih5 < (rsih6 - ((rsih6 - rsih0) / 2))  
+
+
+
+
+
+
+
+
+
+close_HH7 = hh0 > hh7
+ and hh1 < hh0 and hh1 < (hh7_ + ((hh0 - hh7_) * m))  
+ and hh2 < hh0 and hh2 < (hh7_ + ((hh0 - hh7_) * m))  
+ and hh3 < hh0 and hh3 < (hh7_ + ((hh0 - hh7_) * m))  
+ and hh4 < hh0 and hh4 < (hh7_ + ((hh0 - hh7_) * m))  
+ and hh5 < hh0 and hh5 < (hh7_ + ((hh0 - hh7_) * m))
+ and hh6 < hh0 and hh6 < (hh7_ + ((hh0 - hh7_) * m))
+rsi_LH7 = rsih0 < rsih7
+ and rsih1 < (rsih7 - ((rsih7 - rsih0) / 2))  
+ and rsih2 < (rsih7 - ((rsih7 - rsih0) / 2))  
+ and rsih3 < (rsih7 - ((rsih7 - rsih0) / 2))  
+ and rsih4 < (rsih7 - ((rsih7 - rsih0) / 2))  
+ and rsih5 < (rsih7 - ((rsih7 - rsih0) / 2))  
+ and rsih6 < (rsih7 - ((rsih7 - rsih0) / 2))
+ 
+close_HH8 = hh0 > hh8
+ and hh1 < hh0 and hh1 < (hh8_ + ((hh0 - hh8_) * m))  
+ and hh2 < hh0 and hh2 < (hh8_ + ((hh0 - hh8_) * m))  
+ and hh3 < hh0 and hh3 < (hh8_ + ((hh0 - hh8_) * m))  
+ and hh4 < hh0 and hh4 < (hh8_ + ((hh0 - hh8_) * m))  
+ and hh5 < hh0 and hh5 < (hh8_ + ((hh0 - hh8_) * m))
+ and hh6 < hh0 and hh6 < (hh8_ + ((hh0 - hh8_) * m))  
+ and hh7 < hh0 and hh7 < (hh8_ + ((hh0 - hh8_) * m))
+rsi_LH8 = rsih0 < rsih8
+ and rsih1 < (rsih8 - ((rsih8 - rsih0) / 2))  
+ and rsih2 < (rsih8 - ((rsih8 - rsih0) / 2))  
+ and rsih3 < (rsih8 - ((rsih8 - rsih0) / 2))
+ and rsih4 < (rsih8 - ((rsih8 - rsih0) / 2))  
+ and rsih5 < (rsih8 - ((rsih8 - rsih0) / 2))  
+ and rsih6 < (rsih8 - ((rsih8 - rsih0) / 2))  
+ and rsih7 < (rsih8 - ((rsih8 - rsih0) / 2))
+ 
+div_bear_1 = close_HH1 and rsi_LH1
+div_bear_2 = close_HH2 and rsi_LH2
+div_bear_3 = close_HH3 and rsi_LH3
+div_bear_4 = close_HH4 and rsi_LH4
+div_bear_5 = close_HH5 and rsi_LH5
+div_bear_6 = close_HH6 and rsi_LH6
+div_bear_7 = close_HH7 and rsi_LH7
+div_bear_8 = close_HH8 and rsi_LH8
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Bullish Divergences = close LL - RSI HL
+bl1 = 0
+bl_1 = 0  
+bl2 = 0
+bl_2 = 0  
+bl3 = 0
+bl_3 = 0
+bl4 = 0
+bl_4 = 0
+bl5 = 0
+bl_5 = 0
+bl6 = 0
+bl_6 = 0
+bl7 = 0
+bl_7 = 0
+bl8 = 0
+bl_8 = 0
+// Bearish Divergences = close HH - RSI LH
+br1 = 0
+br_1 = 0
+br2 = 0
+br_2 = 0  
+br3 = 0
+br_3 = 0  
+br4 = 0
+br_4 = 0    
+br5 = 0
+br_5 = 0
+br6 = 0
+br_6 = 0
+br7 = 0
+br_7 = 0  
+br8 = 0
+br_8 = 0
+
+
+
+
+
+
+
+
+
+
+
+for i = 0 to 1
+	if div_bull_1 and rsi[i] == rsil0
+    	break
+	bl_1 := bl_1 + 1
+	if div_bull_2 and rsi[i] == rsil0
+    	break
+	bl_2 := bl_2 + 1
+	if div_bull_3 and rsi[i] == rsil0                                                 	 
+    	break
+	bl_3 := bl_3 + 1
+	if div_bull_4 and rsi[i] == rsil0                                                 	 
+    	break
+	bl_4 := bl_4 + 1
+	if div_bull_5 and rsi[i] == rsil0                                                 	 
+    	break
+	bl_5 := bl_5 + 1
+	if div_bull_6 and rsi[i] == rsil0                                                 	 
+    	break
+	bl_6 := bl_6 + 1
+	if div_bull_7 and rsi[i] == rsil0                                                 	 
+    	break
+	bl_7 := bl_7 + 1
+	if div_bull_8 and rsi[i] == rsil0                                                 	 
+    	break
+	bl_8 := bl_8 + 1
+	if rsi[i] == rsil0                                                 	 
+    	break    
+
+
+
+
+
+
+
+for i = 0 to 1    
+	if div_bear_1 and rsi[i] == rsih0                                                 	 
+    	break    
+	br_1 := br_1 + 1
+	if div_bear_2 and rsi[i] == rsih0                                                 	 
+    	break    
+	br_2 := br_2 + 1
+	if div_bear_3 and rsi[i] == rsih0                                                 	 
+    	break    
+	br_3 := br_3 + 1
+	if div_bear_4 and rsi[i] == rsih0                                                 	 
+    	break    
+	br_4 := br_4 + 1
+	if div_bear_5 and rsi[i] == rsih0                                                 	 
+    	break    
+	br_5 := br_5 + 1
+	if div_bear_6 and rsi[i] == rsih0                                                 	 
+    	break    
+	br_6 := br_6 + 1
+	if div_bear_7 and rsi[i] == rsih0                                                 	 
+    	break    
+	br_7 := br_7 + 1
+	if div_bear_8 and rsi[i] == rsih0                                                 	 
+    	break    
+	br_8 := br_8 + 1
+	if rsi[i] == rsih0                                               	 
+    	break    
+
+
+
+
+
+
+
+
+
+
+
+for i = 0 to 100                                                         	 
+	if div_bull_1 and rsi[i] == rsil1
+    	break
+	bl1 := bl1 + 1
+	if rsi[i] == rsil1                                   	 
+    	break    
+ 
+
+
+
+
+
+
+
+
+for i = 0 to 150
+	if div_bull_2 and rsi[i] == rsil2                                     	 
+    	break
+	bl2 := bl2 + 1
+	if rsi[i] == rsil2                                   	 
+    	break    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+for i = 0 to 200
+	if div_bull_3 and rsi[i] == rsil3                                     	 
+    	break
+	bl3 := bl3 + 1
+	if rsi[i] == rsil3                                   	 
+    	break    
+
+
+
+
+
+
+
+
+
+
+
+
+for i = 0 to 200
+	if div_bull_4 and rsi[i] == rsil4                                     	 
+    	break
+	bl4 := bl4 + 1
+	if rsi[i] == rsil4                                   	 
+    	break    
+
+
+
+
+
+
+
+
+
+
+
+
+for i = 0 to 300
+	if div_bull_5 and rsi[i] == rsil5                                   	 
+    	break
+	bl5 := bl5 + 1
+	if rsi[i] == rsil5                                 	 
+    	break    
+
+
+
+
+
+
+
+
+
+
+
+
+for i = 0 to 400
+	if div_bull_6 and rsi[i] == rsil6                                     	 
+    	break
+	bl6 := bl6 + 1
+	if rsi[i] == rsil6                                   	 
+    	break    
+
+
+
+
+
+
+
+
+
+
+
+
+
+for i = 0 to 500
+	if div_bull_7 and rsi[i] == rsil7                                   	 
+    	break
+	bl7 := bl7 + 1
+	if rsi[i] == rsil7                                   	 
+    	break    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+for i = 0 to 500
+	if div_bull_8 and rsi[i] == rsil8                                 	 
+    	break
+	bl8 := bl8 + 1
+	if rsi[i] == rsil8                                 	 
+    	break    
+
+
+
+
+
+
+
+
+
+
+
+
+for i = 0 to 100
+	if div_bear_1 and rsi[i] == rsih1                                 	 
+    	break    
+	br1 := br1 + 1
+	if rsi[i] == rsih1                                   	 
+    	break    
+
+
+
+
+
+
+
+
+
+
+
+
+for i = 0 to 150
+	if div_bear_2 and rsi[i] == rsih2                                       	 
+    	break    
+	br2 := br2 + 1
+	if rsi[i] == rsih2                                 	 
+    	break    
+
+
+
+
+
+
+
+
+
+
+
+for i = 0 to 200
+	if div_bear_3 and rsi[i] == rsih3                                     	 
+    	break    
+	br3 := br3 + 1
+	if rsi[i] == rsih3                                 	 
+    	break    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+for i = 0 to 200
+	if div_bear_4 and rsi[i] == rsih4                                     	 
+    	break    
+	br4 := br4 + 1
+	if rsi[i] == rsih4                                 	 
+    	break    
+
+
+
+
+
+
+
+
+
+
+
+
+
+for i = 0 to 300
+	if div_bear_5 and rsi[i] == rsih5                                     	 
+    	break    
+	br5 := br5 + 1
+	if rsi[i] == rsih5                                 	 
+    	break    
+
+
+
+
+
+
+
+
+
+for i = 0 to 400
+	if div_bear_6 and rsi[i] == rsih6                                   	 
+    	break    
+	br6 := br6 + 1
+	if rsi[i] == rsih6                                 	 
+    	break    
+
+
+
+
+
+
+
+
+
+
+
+
+
+for i = 0 to 500
+	if div_bear_7 and rsi[i] == rsih7                                   	 
+    	break    
+	br7 := br7 + 1                                                         	 
+	if rsi[i] == rsih7                                 	 
+    	break    
+
+
+
+
+
+
+
+
+
+
+
+   
+for i = 0 to 500
+	if div_bear_8 and rsi[i] == rsih8                                 	 
+    	break    
+	br8 := br8 + 1                                                         	 
+	if rsi[i] == rsih8                                 	 
+    	break    
+
+
+
+
+
+
+
+
+if div_bull_1 and not div_bull_2 and not div_bull_3
+ and not div_bull_4 and not div_bull_5 and not div_bull_6 and not div_bull_7 and not div_bull_8
+	ln = line.new(bar_index[bl_1], ll0, bar_index[bl1], ll1, xloc = xloc.bar_index, extend=extend.none, color=bulldivcol, width = divwidth)
+	//lb = label.new(bar_index[bl_4], rsi[bl_4], xloc = xloc.bar_index, yloc=yloc.price, style=_symbl, color=lime, size=_size)
+	line.delete(not pl ? ln : na)
+if div_bull_2 and not div_bull_3 and not div_bull_4
+ and not div_bull_5 and not div_bull_6 and not div_bull_7 and not div_bull_8
+	ln = line.new(bar_index[bl_2], ll0, bar_index[bl2], ll2, xloc = xloc.bar_index, extend=extend.none, color=bulldivcol, width = divwidth)
+	line.delete(not pl ? ln : na)
+if div_bull_3 and not div_bull_4 and not div_bull_5  and not div_bull_6 and not div_bull_7 and not div_bull_8
+	ln = line.new(bar_index[bl_3], ll0, bar_index[bl3], ll3, xloc = xloc.bar_index, extend=extend.none, color=bulldivcol, width = divwidth)
+	line.delete(not pl ? ln : na)
+if div_bull_4 and not div_bull_5 and not div_bull_6
+ and not div_bull_7 and not div_bull_8
+	ln = line.new(bar_index[bl_4], ll0, bar_index[bl4], ll4, xloc = xloc.bar_index, extend=extend.none, color=bulldivcol, width = divwidth)
+	line.delete(not pl ? ln : na)
+	//lb = label.new(bar_index[bl_4], rsi[bl_4], xloc = xloc.bar_index, yloc=yloc.price, style=_symbl, color=lime, size=_size)
+	//label.delete(not pl ? lb : na)
+if div_bull_5 and not div_bull_6 and not div_bull_7 and not div_bull_8
+	ln = line.new(bar_index[bl_5], ll0, bar_index[bl5], ll5, xloc = xloc.bar_index, extend=extend.none, color=bulldivcol, width = divwidth)
+	line.delete(not pl ? ln : na)
+	//lb = label.new(bar_index[bl_5], rsi[bl_5], xloc = xloc.bar_index, yloc=yloc.price, style=_symbl, color=lime, size=_size)
+	//label.delete(not pl ? lb : na)
+if div_bull_6 and not div_bull_7 and not div_bull_8
+	ln = line.new(bar_index[bl_6], ll0, bar_index[bl6], ll6, xloc = xloc.bar_index, extend=extend.none, color=bulldivcol, width = divwidth)
+	line.delete(not pl ? ln : na)
+	//lb = label.new(bar_index[bl_6], rsi[bl_6], xloc = xloc.bar_index, yloc=yloc.price, style=_symbl, color=lime, size=_size)
+	//label.delete(not pl ? lb : na)
+if div_bull_7 and not div_bull_8
+	ln = line.new(bar_index[bl_7], ll0, bar_index[bl7], ll7, xloc = xloc.bar_index, extend=extend.none, color=bulldivcol, width = divwidth)
+	line.delete(not pl ? ln : na)
+	//lb = label.new(bar_index[bl_7], rsi[bl_7], xloc = xloc.bar_index, yloc=yloc.price, style=_symbl, color=aqua, size=_size)
+	//label.delete(not pl ? lb : na)
+if div_bull_8
+	ln = line.new(bar_index[bl_8], ll0, bar_index[bl8], ll8, xloc = xloc.bar_index, extend=extend.none, color=bulldivcol, width = divwidth)
+	line.delete(not pl ? ln : na)
+	//lb = label.new(bar_index[bl_8], rsi[bl_8], xloc = xloc.bar_index, yloc=yloc.price, style=_symbl, color=aqua, size=_size)
+	//label.delete(not pl ? lb : na)
+// Bearish Divergences = close HH - RSI LH
+if div_bear_1 and not div_bear_2 and not div_bear_3
+ and not div_bear_4 and not div_bear_5 and not div_bear_6 and not div_bear_7 and not div_bear_8
+	ln = line.new(bar_index[br_1], hh0, bar_index[br1], hh1, xloc = xloc.bar_index, extend=extend.none, color=beardivcol, width = divwidth)
+	line.delete(not ph ? ln : na)
+if div_bear_2 and not div_bear_3 and not div_bear_4
+ and not div_bear_5 and not div_bear_6 and not div_bear_7 and not div_bear_8
+	ln = line.new(bar_index[br_2], hh0, bar_index[br2], hh2, xloc = xloc.bar_index, extend=extend.none, color=beardivcol, width = divwidth)
+	line.delete(not ph ? ln : na)
+if div_bear_3 and not div_bear_4 and not div_bear_5
+ and not div_bear_6 and not div_bear_7 and not div_bear_8
+	ln = line.new(bar_index[br_3], hh0, bar_index[br3], hh3, xloc = xloc.bar_index, extend=extend.none, color=beardivcol, width = divwidth)
+	line.delete(not ph ? ln : na)
+if div_bear_4 and not div_bear_5 and not div_bear_6
+ and not div_bear_7 and not div_bear_8
+	ln = line.new(bar_index[br_4], hh0, bar_index[br4], hh4, xloc = xloc.bar_index, extend=extend.none, color=beardivcol, width = divwidth)
+	line.delete(not ph ? ln : na)
+	//lb = label.new(bar_index[br_4], rsi[br_4], xloc = xloc.bar_index, yloc=yloc.price, style=levels_style, color=red, size=_size)
+	//label.delete(not ph ? lb : na)
+if div_bear_5 and not div_bear_6 and not div_bear_7 and not div_bear_8
+	ln = line.new(bar_index[br_5], hh0, bar_index[br5], hh5, xloc = xloc.bar_index, extend=extend.none, color=beardivcol, width = divwidth)
+	line.delete(not ph ? ln : na)
+	//lb = label.new(bar_index[br_5], rsi[br_5], xloc = xloc.bar_index, yloc=yloc.price, style=levels_style, color=red, size=_size)
+	//label.delete(not ph ? lb : na)
+if div_bear_6 and not div_bear_7 and not div_bear_8
+	ln = line.new(bar_index[br_6], hh0, bar_index[br6], hh6, xloc = xloc.bar_index, extend=extend.none, color=beardivcol, width = divwidth)
+	line.delete(not ph ? ln : na)
+	//lb = label.new(bar_index[br_6], rsi[br_6], xloc = xloc.bar_index, yloc=yloc.price, style=levels_style, color=red, size=_size)
+	//label.delete(not ph ? lb : na)
+if div_bear_7 and not div_bear_8
+	ln = line.new(bar_index[br_7], hh0, bar_index[br7], hh7, xloc = xloc.bar_index, extend=extend.none, color=beardivcol, width = divwidth)
+	line.delete(not ph ? ln : na)  
+	//lb = label.new(bar_index[br_7], rsi[br_7], xloc = xloc.bar_index, yloc=yloc.price, style=levels_style, color=purple, size=_size)
+	//label.delete(not ph ? lb : na)
+if div_bear_8
+	ln = line.new(bar_index[br_8], hh0, bar_index[br8], hh8, xloc = xloc.bar_index, extend=extend.none, color=beardivcol, width = divwidth)
+	line.delete(not ph ? ln : na)  
+	//lb = label.new(bar_index[br_8], rsi[br_8], xloc = xloc.bar_index, yloc=yloc.price, style=levels_style, color=purple, size=_size)
+	//label.delete(not ph ? lb : na)
+//End
+
+
+//TO TEST FOR DIVERGENCES USE BOOL FIELDS: div_bull_1, div_bull_2, div_bear_1, div_bear_2, etc
+//TO TEST FOR ANY DIVERGENCE UNCOMMENT THIS CODE and use bull_div or bear_div bools
+
+bull_div =  (div_bull_3 and not div_bull_3[1] and not div_bull_4 and not div_bull_5 and not div_bull_6 and not div_bull_7 and not div_bull_8)
+			  or (div_bull_4 and not div_bull_4[1] and not div_bull_5 and not div_bull_6 and not div_bull_7 and not div_bull_8)
+				  or (div_bull_5 and not div_bull_5[1] and not div_bull_6 and not div_bull_7 and not div_bull_8)
+				      or (div_bull_6 and not div_bull_6[1] and not div_bull_7 and not div_bull_8) 
+					      or (div_bull_7 and not div_bull_7[1] and not div_bull_8)
+						      or (div_bull_8 and not div_bull_8[1])
+							  
+bull_divsmall = (div_bull_1  and not div_bull_1[1]and not div_bull_2 and not div_bull_3 and not div_bull_4 and not div_bull_5 and not div_bull_6 and not div_bull_7 and not div_bull_8) 
+				  or (div_bull_2 and not div_bull_2[1] and not div_bull_3 and not div_bull_4 and not div_bull_5 and not div_bull_6 and not div_bull_7 and not div_bull_8)
+
+bear_div =  (div_bear_3 and not div_bear_3[1] and not div_bear_4 and not div_bear_5 and not div_bear_6 and not div_bear_7 and not div_bear_8)
+			  or (div_bear_4 and not div_bear_4[1] and not div_bear_5 and not div_bear_6 and not div_bear_7 and not div_bear_8)
+				  or (div_bear_5 and not div_bear_5[1] and not div_bear_6 and not div_bear_7 and not div_bear_8)
+				      or (div_bear_6 and not div_bear_6[1] and not div_bear_7 and not div_bear_8) 
+					      or (div_bear_7 and not div_bear_7[1] and not div_bear_8)
+						      or (div_bear_8 and not div_bear_8[1])
+bear_divsmall = (div_bear_1 and not div_bear_1[1] and not div_bear_2 and not div_bear_3 and not div_bear_4 and not div_bear_5 and not div_bear_6 and not div_bear_7 and not div_bear_8) 
+				  or (div_bear_2 and not div_bear_2[1] and not div_bear_3 and not div_bear_4 and not div_bear_5 and not div_bear_6 and not div_bear_7 and not div_bear_8)
+
+
+
+// plot large bullish divergence
+plotshape(bull_div, title = "Big Bullish Divergence", style=shape.circle, location=location.belowbar, size=size.small, color=color.green, offset = -1)
+
+// plot small bullish divergence
+plotshape(bull_divsmall, title= "Small Bullish Divergence", style=shape.circle, location=location.belowbar, size=size.tiny, color=color.green, offset = -1)
+
+// plot large bearish divergence
+plotshape(bear_div, title= "Big Bearish Divergence", style=shape.circle, location=location.abovebar, size=size.small, color=color.red,  offset = -1)
+
+// plot small bearish divergence
+plotshape(bear_divsmall,  title= "Small Bearish Divergence", style=shape.circle, location=location.abovebar, size=size.tiny, color=color.red,  offset = -1)
+
+
+
+alertcondition(bull_div, title="Big Bullish Divergence", message="Big Bullish Divergence detected!")
+alertcondition(bull_divsmall, title="Small Bullish Divergence", message="Small Bullish Divergence detected!")
+alertcondition(bear_div, title="Big Bearish Divergence", message="Big Bearish Divergence detected!")
+alertcondition(bear_divsmall, title="Small Bearish Divergence", message="Small Bearish Divergence detected!")

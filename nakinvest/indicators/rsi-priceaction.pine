@@ -1,0 +1,300 @@
+//@version=5
+indicator("RSI Price Action", shorttitle="RSI-PA", overlay=true, max_labels_count=500, max_lines_count=500)
+
+// =============================================================================
+// INDICATOR OVERVIEW
+// =============================================================================
+// Professional RSI Price Action Indicator
+//
+// Features:
+// - RSI calculation with customizable periods
+// - Overbought/Oversold level detection
+// - Professional labels on price candles
+// - Background zone coloring
+// - Multiple timeframe analysis
+// - Alert conditions for extreme RSI levels
+// - Divergence detection capabilities
+// - Visual RSI level indicators on chart
+//
+// The indicator provides clear visual cues when price action aligns
+// with RSI extremes, helping traders identify potential reversal zones.
+
+// =============================================================================
+// INPUT PARAMETERS
+// =============================================================================
+
+// RSI Settings
+rsiLength = input.int(14, "RSI Period", minval=1, maxval=100, group="RSI Settings")
+rsiSource = input.source(close, "RSI Source", group="RSI Settings")
+rsiOverbought = input.int(70, "RSI Overbought Level", minval=50, maxval=100, group="RSI Settings")
+rsiOversold = input.int(30, "RSI Oversold Level", minval=0, maxval=50, group="RSI Settings")
+
+// Visual Settings
+showLabels = input.bool(true, "Show Price Action Labels", group="Visual Settings")
+showBackground = input.bool(true, "Show Background Zones", group="Visual Settings")
+showRsiLine = input.bool(false, "Show RSI Line on Chart", group="Visual Settings")
+showRsiValue = input.bool(true, "Show Current RSI Value", group="Visual Settings")
+
+// Label Settings
+labelSize = input.string("Tiny", "Label Size", options=["Tiny", "Small", "Normal", "Large", "Huge"], group="Label Settings")
+labelStyle = input.string("Arrow", "Label Style", options=["Arrow", "Flag", "Circle", "Square", "Diamond"], group="Label Settings")
+labelTransparency = input.int(80, "Label Transparency", minval=0, maxval=100, group="Label Settings")
+
+// Colors
+overboughtColor = input.color(color.red, "Overbought Color", group="Colors")
+oversoldColor = input.color(color.green, "Oversold Color", group="Colors")
+rsiLineColor = input.color(color.blue, "RSI Line Color", group="Colors")
+
+// Advanced Settings
+enableDivergence = input.bool(false, "Enable Divergence Detection", group="Advanced Settings")
+divergenceLookback = input.int(20, "Divergence Lookback Period", minval=5, maxval=50, group="Advanced Settings")
+minDivergenceStrength = input.float(0.5, "Minimum Divergence Strength", minval=0.1, maxval=2.0, step=0.1, group="Advanced Settings")
+
+// Alert Settings
+enableAlerts = input.bool(true, "Enable Alerts", group="Alert Settings")
+alertOnEntry = input.bool(true, "Alert on Entry (Overbought/Oversold)", group="Alert Settings")
+alertOnExit = input.bool(true, "Alert on Exit (RSI Returns to Normal)", group="Alert Settings")
+
+// =============================================================================
+// TECHNICAL CALCULATIONS
+// =============================================================================
+
+// RSI Calculation
+rsi = ta.rsi(rsiSource, rsiLength)
+
+// RSI Level Detection
+rsiOverboughtZone = rsi >= rsiOverbought
+rsiOversoldZone = rsi <= rsiOversold
+rsiNormalZone = rsi > rsiOversold and rsi < rsiOverbought
+
+// State Tracking for Entry/Exit Detection
+var bool overboughtEntry = false
+var bool oversoldEntry = false
+var bool overboughtExit = false
+var bool oversoldExit = false
+
+// Entry Detection (RSI crosses into extreme zone)
+overboughtEntry := rsiOverboughtZone and not rsiOverboughtZone[1]
+oversoldEntry := rsiOversoldZone and not rsiOversoldZone[1]
+
+// Exit Detection (RSI crosses out of extreme zone)
+overboughtExit := not rsiOverboughtZone and rsiOverboughtZone[1]
+oversoldExit := not rsiOversoldZone and rsiOversoldZone[1]
+
+// =============================================================================
+// DIVERGENCE DETECTION (Optional)
+// =============================================================================
+
+// Price and RSI pivots for divergence detection
+priceHigh = ta.pivothigh(high, 2, 2)
+priceLow = ta.pivotlow(low, 2, 2)
+rsiHigh = ta.pivothigh(rsi, 2, 2)
+rsiLow = ta.pivotlow(rsi, 2, 2)
+
+// Bullish Divergence: Price makes lower low, RSI makes higher low
+bullishDivergence = enableDivergence and priceLow and rsiLow and 
+                   low[2] < ta.valuewhen(priceLow[divergenceLookback], low[2], 1) and 
+                   rsi[2] > ta.valuewhen(rsiLow[divergenceLookback], rsi[2], 1)
+
+// Bearish Divergence: Price makes higher high, RSI makes lower high
+bearishDivergence = enableDivergence and priceHigh and rsiHigh and 
+                   high[2] > ta.valuewhen(priceHigh[divergenceLookback], high[2], 1) and 
+                   rsi[2] < ta.valuewhen(rsiHigh[divergenceLookback], rsi[2], 1)
+
+// =============================================================================
+// VISUAL ELEMENTS
+// =============================================================================
+
+// Label Size Mapping
+getLabelSize() =>
+    switch labelSize
+        "Tiny" => size.tiny
+        "Small" => size.small
+        "Normal" => size.normal
+        "Large" => size.large
+        "Huge" => size.huge
+        => size.normal
+
+// Label Style Mapping
+getLabelStyle() =>
+    switch labelStyle
+        "Arrow" => label.style_label_up
+        "Flag" => label.style_flag
+        "Circle" => label.style_circle
+        "Square" => label.style_square
+        "Diamond" => label.style_diamond
+        => label.style_label_up
+
+// Color with Transparency
+getOverboughtColor() => color.new(overboughtColor, labelTransparency)
+getOversoldColor() => color.new(oversoldColor, labelTransparency)
+
+// =============================================================================
+// PRICE ACTION LABELS
+// =============================================================================
+
+// Overbought Labels (more discreet)
+if showLabels and overboughtEntry
+    labelText = "OB"
+    label.new(bar_index, high, labelText, 
+              color=color.new(overboughtColor, 80), 
+              style=label.style_circle, 
+              textcolor=color.white, 
+              size=size.tiny, 
+              tooltip="RSI Overbought at " + str.tostring(rsi, "#.##") + "\nPrice: " + str.tostring(close, "#.##"))
+
+// Oversold Labels (more discreet)
+if showLabels and oversoldEntry
+    labelText = "OS"
+    label.new(bar_index, low, labelText, 
+              color=color.new(oversoldColor, 80), 
+              style=label.style_circle, 
+              textcolor=color.white, 
+              size=size.tiny, 
+              tooltip="RSI Oversold at " + str.tostring(rsi, "#.##") + "\nPrice: " + str.tostring(close, "#.##"))
+
+// Divergence Labels (if enabled, more discreet)
+if showLabels and bullishDivergence
+    label.new(bar_index, low, "•", 
+              color=color.new(color.green, 80), 
+              style=label.style_circle, 
+              textcolor=color.white, 
+              size=size.tiny, 
+              tooltip="Bullish Divergence Detected\nRSI: " + str.tostring(rsi, "#.##"))
+
+if showLabels and bearishDivergence
+    label.new(bar_index, high, "•", 
+              color=color.new(color.red, 80), 
+              style=label.style_circle, 
+              textcolor=color.white, 
+              size=size.tiny, 
+              tooltip="Bearish Divergence Detected\nRSI: " + str.tostring(rsi, "#.##"))
+
+// =============================================================================
+// BACKGROUND COLORING (more subtle)
+// =============================================================================
+
+// Overbought Zone Background
+bgcolor(showBackground and rsiOverboughtZone ? color.new(overboughtColor, 98) : na, title="RSI Overbought Zone")
+
+// Oversold Zone Background
+bgcolor(showBackground and rsiOversoldZone ? color.new(oversoldColor, 98) : na, title="RSI Oversold Zone")
+
+// =============================================================================
+// RSI LINE ON CHART
+// =============================================================================
+
+// Normalize RSI to price range for display
+priceRange = high - low
+rsiNormalized = low + (rsi / 100) * priceRange
+
+// Plot RSI line on price chart (more subtle)
+plot(showRsiLine ? rsiNormalized : na, title="RSI Line", color=color.new(rsiLineColor, 70), linewidth=1)
+
+// =============================================================================
+// RSI VALUE DISPLAY
+// =============================================================================
+
+// Current RSI Value Label (more discreet)
+if showRsiValue and barstate.islast
+    rsiColor = rsiOverboughtZone ? overboughtColor : rsiOversoldZone ? oversoldColor : color.gray
+    rsiLabel = str.tostring(rsi, "#.#")
+    if rsiOverboughtZone
+        rsiLabel := rsiLabel + "OB"
+    else if rsiOversoldZone
+        rsiLabel := rsiLabel + "OS"
+    
+    label.new(bar_index, high, rsiLabel, 
+              color=color.new(rsiColor, 85), 
+              style=label.style_label_down, 
+              textcolor=color.white, 
+              size=size.small)
+
+// Periodic RSI Score Display (every 20 bars when not OB/OS)
+showPeriodicRSI = input.bool(true, "Show Periodic RSI Scores", group="Visual Settings")
+rsiDisplayInterval = input.int(20, "RSI Display Interval (bars)", minval=5, maxval=100, group="Visual Settings")
+
+if showPeriodicRSI and not rsiOverboughtZone and not rsiOversoldZone and bar_index % rsiDisplayInterval == 0
+    rsiLabel = str.tostring(rsi, "#.#")
+    label.new(bar_index, high, rsiLabel, 
+              color=color.new(color.gray, 90), 
+              style=label.style_label_down, 
+              textcolor=color.white, 
+              size=size.tiny, 
+              tooltip="RSI: " + str.tostring(rsi, "#.##") + "\nPrice: " + str.tostring(close, "#.##"))
+
+// =============================================================================
+// HORIZONTAL LEVEL LINES
+// =============================================================================
+
+// RSI Level Lines (optional, can be enabled via inputs)
+showLevelLines = input.bool(false, "Show RSI Level Lines", group="Visual Settings")
+
+if showLevelLines
+    // Overbought level line
+    line.new(bar_index[50], high, bar_index, high, color=color.new(overboughtColor, 70), width=1, style=line.style_dashed)
+    // Oversold level line  
+    line.new(bar_index[50], low, bar_index, low, color=color.new(oversoldColor, 70), width=1, style=line.style_dashed)
+
+// =============================================================================
+// ALERTS
+// =============================================================================
+
+// Entry Alerts
+if enableAlerts and alertOnEntry and overboughtEntry
+    alert("RSI Overbought Alert: " + syminfo.ticker + " | RSI: " + str.tostring(rsi, "#.#") + " | Price: " + str.tostring(close, "#.##"), alert.freq_once_per_bar)
+
+if enableAlerts and alertOnEntry and oversoldEntry
+    alert("RSI Oversold Alert: " + syminfo.ticker + " | RSI: " + str.tostring(rsi, "#.#") + " | Price: " + str.tostring(close, "#.##"), alert.freq_once_per_bar)
+
+// Exit Alerts
+if enableAlerts and alertOnExit and overboughtExit
+    alert("RSI Overbought Exit: " + syminfo.ticker + " | RSI: " + str.tostring(rsi, "#.#") + " | Price: " + str.tostring(close, "#.##"), alert.freq_once_per_bar)
+
+if enableAlerts and alertOnExit and oversoldExit
+    alert("RSI Oversold Exit: " + syminfo.ticker + " | RSI: " + str.tostring(rsi, "#.#") + " | Price: " + str.tostring(close, "#.##"), alert.freq_once_per_bar)
+
+// Divergence Alerts
+if enableAlerts and bullishDivergence
+    alert("Bullish Divergence: " + syminfo.ticker + " | RSI: " + str.tostring(rsi, "#.#") + " | Price: " + str.tostring(close, "#.##"), alert.freq_once_per_bar)
+
+if enableAlerts and bearishDivergence
+    alert("Bearish Divergence: " + syminfo.ticker + " | RSI: " + str.tostring(rsi, "#.#") + " | Price: " + str.tostring(close, "#.##"), alert.freq_once_per_bar)
+
+// =============================================================================
+// HIDDEN PLOTS FOR ALERT CONDITIONS
+// =============================================================================
+
+// These plots are hidden but can be used for alert conditions
+plot(rsiOverboughtZone ? 1 : 0, title="RSI Overbought", display=display.none)
+plot(rsiOversoldZone ? 1 : 0, title="RSI Oversold", display=display.none)
+plot(overboughtEntry ? 1 : 0, title="Overbought Entry", display=display.none)
+plot(oversoldEntry ? 1 : 0, title="Oversold Entry", display=display.none)
+plot(overboughtExit ? 1 : 0, title="Overbought Exit", display=display.none)
+plot(oversoldExit ? 1 : 0, title="Oversold Exit", display=display.none)
+plot(bullishDivergence ? 1 : 0, title="Bullish Divergence", display=display.none)
+plot(bearishDivergence ? 1 : 0, title="Bearish Divergence", display=display.none)
+
+// =============================================================================
+// TABLE FOR RSI STATISTICS (Optional)
+// =============================================================================
+
+showStatsTable = input.bool(false, "Show RSI Statistics Table", group="Visual Settings")
+
+if showStatsTable and barstate.islast
+    var table statsTable = table.new(position.top_right, 2, 6, bgcolor=color.new(color.white, 80), border_width=1)
+    
+    table.cell(statsTable, 0, 0, "RSI Stats", text_color=color.black, text_size=size.small)
+    table.cell(statsTable, 1, 0, "Value", text_color=color.black, text_size=size.small)
+    table.cell(statsTable, 0, 1, "Current RSI", text_color=color.black, text_size=size.tiny)
+    table.cell(statsTable, 1, 1, str.tostring(rsi, "#.##"), text_color=rsiOverboughtZone ? overboughtColor : rsiOversoldZone ? oversoldColor : color.black, text_size=size.tiny)
+    table.cell(statsTable, 0, 2, "Overbought", text_color=color.black, text_size=size.tiny)
+    table.cell(statsTable, 1, 2, str.tostring(rsiOverbought), text_color=overboughtColor, text_size=size.tiny)
+    table.cell(statsTable, 0, 3, "Oversold", text_color=color.black, text_size=size.tiny)
+    table.cell(statsTable, 1, 3, str.tostring(rsiOversold), text_color=oversoldColor, text_size=size.tiny)
+    table.cell(statsTable, 0, 4, "Status", text_color=color.black, text_size=size.tiny)
+    statusText = rsiOverboughtZone ? "OVERBOUGHT" : rsiOversoldZone ? "OVERSOLD" : "NORMAL"
+    statusColor = rsiOverboughtZone ? overboughtColor : rsiOversoldZone ? oversoldColor : color.gray
+    table.cell(statsTable, 1, 4, statusText, text_color=statusColor, text_size=size.tiny)
+    table.cell(statsTable, 0, 5, "Price", text_color=color.black, text_size=size.tiny)
+    table.cell(statsTable, 1, 5, str.tostring(close, "#.##"), text_color=color.black, text_size=size.tiny)

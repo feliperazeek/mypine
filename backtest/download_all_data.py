@@ -15,8 +15,8 @@ def download_all_data():
     """Download market data for all requested coins and timeframes"""
     
     coins = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'LINKUSDT', 'BNBUSDT', 'TRXUSDT', 'XRPUSDT']
-    timeframes = ['15m', '1h']
-    days = 90  # 90 days of historical data
+    timeframes = ['15m', '1h', '4h', '1d']
+    days = 180  # 90 days of historical data
     
     total_downloads = len(coins) * len(timeframes)
     current = 0
